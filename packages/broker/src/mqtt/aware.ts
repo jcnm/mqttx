@@ -36,13 +36,14 @@ export class SparkplugAwareBroker {
       if (!client) return;
 
       const parsed = parseTopic(packet.topic);
+      const payload = Buffer.isBuffer(packet.payload) ? packet.payload : Buffer.from(packet.payload);
 
       if (parsed.messageType === MessageType.NBIRTH) {
-        await this.handleNBirthCertificate(parsed, packet.payload);
+        await this.handleNBirthCertificate(parsed, payload);
       } else if (parsed.messageType === MessageType.DBIRTH) {
-        await this.handleDBirthCertificate(parsed, packet.payload);
+        await this.handleDBirthCertificate(parsed, payload);
       } else if (parsed.messageType === MessageType.NDEATH) {
-        await this.handleNDeathTimestampUpdate(parsed, packet.payload);
+        await this.handleNDeathTimestampUpdate(parsed, payload);
       }
     });
 

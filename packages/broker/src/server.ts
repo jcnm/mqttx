@@ -139,18 +139,20 @@ export async function createServer(options: ServerOptions) {
 
   // WebSocket for real-time updates
   fastify.get('/ws', { websocket: true }, (connection, req) => {
-    connection.socket.on('message', (message) => {
+    const ws = connection.socket as any;
+
+    ws.on('message', (message: any) => {
       // Handle WebSocket messages
-      connection.socket.send(JSON.stringify({ echo: message.toString() }));
+      ws.send(JSON.stringify({ echo: message.toString() }));
     });
 
     // Send periodic updates
     const interval = setInterval(() => {
       const stats = options.broker.getStats();
-      connection.socket.send(JSON.stringify({ type: 'stats', data: stats }));
+      ws.send(JSON.stringify({ type: 'stats', data: stats }));
     }, 5000);
 
-    connection.socket.on('close', () => {
+    ws.on('close', () => {
       clearInterval(interval);
     });
   });
