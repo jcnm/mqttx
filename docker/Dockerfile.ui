@@ -7,14 +7,14 @@ RUN npm install -g pnpm@9.15.1
 WORKDIR /app
 
 # Copy workspace files
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
+COPY pnpm-workspace.yaml package.json ./
 
 # Copy package files
 COPY packages/codec/package.json ./packages/codec/
 COPY packages/ui/package.json ./packages/ui/
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source code
 COPY packages/codec ./packages/codec

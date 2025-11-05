@@ -147,4 +147,3 @@ data/
 *.db-wal
 certs/
 *.pem
-pnpm-lock.yaml
