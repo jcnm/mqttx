@@ -15,6 +15,7 @@ export interface PersistenceOptions {
 export class StatePersistence {
   private redis: Redis;
   private keyPrefix: string;
+  private connected: boolean = false;
 
   constructor(options: PersistenceOptions = {}) {
     this.keyPrefix = options.keyPrefix || 'sparkplug:state:';
@@ -24,6 +25,35 @@ export class StatePersistence {
       db: options.db || 0,
       password: options.password,
       lazyConnect: true,
+      retryStrategy: (times: number) => {
+        // Stop retrying after 3 attempts
+        if (times > 3) {
+          console.warn('⚠️  Redis connection failed after 3 attempts, running without persistence');
+          return null;
+        }
+        // Exponential backoff: 1s, 2s, 4s
+        return Math.min(times * 1000, 4000);
+      },
+    });
+
+    // Handle Redis errors gracefully
+    this.redis.on('error', (error) => {
+      if (this.connected) {
+        console.warn('⚠️  Redis connection error:', error.message);
+      }
+      this.connected = false;
+    });
+
+    this.redis.on('connect', () => {
+      this.connected = true;
+      console.log('✅ Redis connected successfully');
+    });
+
+    this.redis.on('close', () => {
+      if (this.connected) {
+        console.warn('⚠️  Redis connection closed');
+      }
+      this.connected = false;
     });
   }
 
@@ -33,6 +63,10 @@ export class StatePersistence {
 
   async disconnect(): Promise<void> {
     await this.redis.quit();
+  }
+
+  isConnected(): boolean {
+    return this.connected;
   }
 
   // Node State Persistence
