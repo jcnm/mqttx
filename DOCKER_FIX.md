@@ -221,6 +221,9 @@ claude/sparkplug-mqtt-scada-platform-011CUodRGtU7Wh5vBkKufodA
 - `db48bd4` - Update Docker fix documentation with package version fixes
 - `f52e3b0` - Add comprehensive project summary
 - `ffe0c1e` - Resolve TypeScript compilation errors in Docker builds
+- `974e3cf` - Update Docker fix documentation with TypeScript fixes
+- `65ab952` - Add comprehensive build status and troubleshooting guide
+- `9c006d8` - Fix TypeScript return type errors in decoder
 
 ---
 
