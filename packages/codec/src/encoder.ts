@@ -1,7 +1,7 @@
 // Sparkplug B Protocol Buffers Encoder
 // Encodes TypeScript objects to Sparkplug B protobuf format
 
-import protobuf from 'protobufjs';
+import * as protobuf from 'protobufjs';
 import { gzip } from 'pako';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +44,7 @@ export function encodePayload(
 
   // Apply GZIP compression if requested
   if (options.compress) {
-    const level = options.compressionLevel ?? 6;
+    const level = (options.compressionLevel ?? 6) as any;
     encoded = gzip(encoded, { level });
   }
 

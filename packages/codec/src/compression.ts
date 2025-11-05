@@ -3,7 +3,7 @@
 import { gzip as pakoGzip, ungzip as pakoUngzip } from 'pako';
 
 export function compress(data: Uint8Array, level = 6): Uint8Array {
-  return pakoGzip(data, { level });
+  return pakoGzip(data, { level: level as any });
 }
 
 export function decompress(data: Uint8Array): Uint8Array {
