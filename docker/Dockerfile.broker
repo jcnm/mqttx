@@ -38,7 +38,11 @@ RUN npm install -g pnpm@9.15.1
 
 WORKDIR /app
 
-# Copy built packages
+# Copy workspace configuration
+COPY --from=base /app/pnpm-workspace.yaml ./
+COPY --from=base /app/package.json ./
+
+# Copy built packages with their package.json files
 COPY --from=base /app/packages/codec/dist ./packages/codec/dist
 COPY --from=base /app/packages/codec/package.json ./packages/codec/
 COPY --from=base /app/packages/codec/proto ./packages/codec/proto
@@ -53,10 +57,8 @@ COPY --from=base /app/packages/broker/dist ./packages/broker/dist
 COPY --from=base /app/packages/broker/package.json ./packages/broker/
 COPY --from=base /app/packages/broker/config ./packages/broker/config
 
-# Copy workspace files
-COPY --from=base /app/pnpm-workspace.yaml ./
-COPY --from=base /app/package.json ./
-COPY --from=base /app/node_modules ./node_modules
+# Install production dependencies only
+RUN pnpm install --prod --no-frozen-lockfile
 
 WORKDIR /app/packages/broker
 
