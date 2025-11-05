@@ -1,0 +1,35 @@
+{
+  "name": "sparkplug-mqtt-platform",
+  "version": "1.0.0",
+  "description": "Production-grade MQTT Sparkplug B broker with integrated SCADA UI - Full ISO/IEC 20237:2023 implementation",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.1",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "broker": "pnpm --filter @sparkplug/broker dev",
+    "ui": "pnpm --filter @sparkplug/ui dev",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "typescript": "^5.7.2"
+    }
+  }
+}

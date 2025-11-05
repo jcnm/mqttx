@@ -1,0 +1,228 @@
+# 🔥 SPARKPLUG B MQTT BROKER CONFIGURATION
+# ISO/IEC 20237:2023 - Full Compliant & Aware Implementation
+
+# Dynamic Sparkplug Version - Future-proof
+sparkplug:
+  version: "spBv1.0"  # Can be updated to spBv2.0, spBv3.0
+
+# 📡 MQTT Broker Settings
+mqtt:
+  ports:
+    tcp: 1883
+    tcp_tls: 8883
+    ws: 8083
+    wss: 8084
+
+  tls:
+    enabled: false  # Set to true in production
+    cert_path: "./certs/broker-cert.pem"
+    key_path: "./certs/broker-key.pem"
+    ca_path: "./certs/ca-cert.pem"
+
+  limits:
+    max_clients: 10000
+    max_packet_size: 268435456  # 256MB
+    max_qos_0_mem: 1048576      # 1MB
+    max_qos_1_2_mem: 10485760   # 10MB
+
+# ✅ SPARKPLUG COMPLIANT BROKER (Mandatory)
+compliant_broker:
+  mqtt:
+    protocols: ["3.1.1", "5.0"]
+    qos_levels: [0, 1, 2]
+
+  retained_messages:
+    enabled: true
+    max_per_topic: 1
+    max_total: 100000
+
+  last_will:
+    enabled: true
+    qos_enforcement: 0
+    retain_enforcement: false
+    validate_payload: true
+
+  session_management:
+    clean_session_enforcement: true
+    clean_start_enforcement: true
+    session_expiry: 0
+
+  wildcards:
+    single_level: true
+    multi_level: true
+
+# ✅ SPARKPLUG AWARE BROKER (Optional)
+aware_broker:
+  enabled: true
+
+  birth_certificate_storage:
+    enabled: true
+    storage_backend: "redis"  # or "memory", "sqlite"
+    redis_key_prefix: "sparkplug:births:"
+    retention_policy:
+      max_age_hours: 720
+      max_per_node: 100
+
+  certificate_topics:
+    enabled: true
+    namespace_prefix: "$sparkplug/certificates"
+    retain: true
+    qos: 0
+
+  ndeath_timestamp_update:
+    enabled: true
+    update_on_disconnect: true
+    use_broker_time: true
+
+  sequence_validation:
+    enabled: true
+    enforce_bdseq_matching: true
+    enforce_seq_ordering: true
+    reject_invalid: false
+    log_violations: true
+
+  state_management:
+    track_node_states: true
+    track_device_states: true
+    heartbeat_monitoring: true
+    heartbeat_timeout_ms: 60000
+
+# 🎛️ PRIMARY HOST APPLICATION / SCADA
+scada:
+  host_application:
+    enabled: true
+
+    primary_host:
+      enabled: true
+      host_id: "SCADA_PRIMARY_01"
+      is_primary: true
+
+    state_management:
+      enabled: true
+      topic_format: "${namespace}/STATE/${host_id}"
+      message_format: "json"
+      qos: 1
+      retain: true
+      publish_interval_ms: 30000
+      publish_on_connect: true
+      publish_on_disconnect: true
+
+    birth_monitoring:
+      subscribe_to_births: true
+      auto_discovery: true
+
+    command_interface:
+      enabled: true
+      authorized_groups: ["*"]
+      rate_limiting:
+        max_commands_per_minute: 100
+
+    data_subscription:
+      auto_subscribe: true
+      rbe_detection:
+        enabled: true
+        track_changes: true
+
+    store_and_forward:
+      enabled: true
+      storage_backend: "redis"
+      max_queue_size: 10000
+      flush_on_reconnect: true
+
+# 🔍 VALIDATION RULES
+validation:
+  topics:
+    enforce_namespace: true
+    allowed_message_types:
+      - NBIRTH
+      - NDEATH
+      - NDATA
+      - NCMD
+      - DBIRTH
+      - DDEATH
+      - DDATA
+      - DCMD
+      - STATE
+    max_topic_length: 65536
+    allow_custom_namespaces: false
+
+  payloads:
+    validate_protobuf: true
+    max_metrics_per_payload: 256
+    enforce_aliases: true
+    enforce_timestamps: true
+
+    quality_codes:
+      enabled: true
+      allowed_values: [0, 1, 64, 192]  # BAD=0, STALE=1, UNCERTAIN=64, GOOD=192
+
+  sequences:
+    enforce_bdseq: true
+    enforce_seq: true
+    seq_wrap_at: 255
+
+# 📊 TELEMETRY
+telemetry:
+  opentelemetry:
+    enabled: true
+    service_name: "sparkplug-mqtt-broker"
+
+    metrics:
+      enabled: true
+      port: 9090
+      path: "/metrics"
+
+      custom_metrics:
+        - name: "sparkplug_messages_total"
+          type: "counter"
+          description: "Total Sparkplug messages processed"
+          labels: ["message_type", "group_id"]
+
+        - name: "sparkplug_nodes_online"
+          type: "gauge"
+          description: "Number of online edge nodes"
+
+        - name: "sparkplug_devices_online"
+          type: "gauge"
+          description: "Number of online devices"
+
+        - name: "sparkplug_sequence_errors"
+          type: "counter"
+          description: "Sequence validation errors"
+          labels: ["error_type"]
+
+    traces:
+      enabled: false
+      sample_rate: 0.1
+
+  logging:
+    level: "info"  # debug, info, warn, error
+    pretty: true   # true for dev, false for prod
+    destination: "stdout"
+
+    audit_log:
+      enabled: true
+      log_commands: true
+      log_births: true
+      log_deaths: true
+
+# 🗄️ STORAGE
+storage:
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    password: null
+
+    cluster:
+      enabled: false
+      nodes:
+        - host: "redis-1"
+          port: 6379
+        - host: "redis-2"
+          port: 6379
+
+  sqlite:
+    enabled: true
+    path: "./data/telemetry.db"
+    wal_mode: true

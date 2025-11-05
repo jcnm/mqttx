@@ -1,0 +1,41 @@
+# Sparkplug SCADA UI Dockerfile
+FROM node:23-alpine AS base
+
+# Install pnpm
+RUN npm install -g pnpm@9.15.1
+
+WORKDIR /app
+
+# Copy workspace files
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
+
+# Copy package files
+COPY packages/codec/package.json ./packages/codec/
+COPY packages/ui/package.json ./packages/ui/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY packages/codec ./packages/codec
+COPY packages/ui ./packages/ui
+
+# Build codec package (UI depends on it)
+RUN pnpm --filter @sparkplug/codec build
+
+# Build UI
+WORKDIR /app/packages/ui
+RUN pnpm build
+
+# Production stage with Nginx
+FROM nginx:alpine
+
+# Copy built files
+COPY --from=base /app/packages/ui/dist /usr/share/nginx/html
+
+# Copy nginx config
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

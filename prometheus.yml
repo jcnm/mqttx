@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'sparkplug-monitor'
+
+scrape_configs:
+  - job_name: 'sparkplug-broker'
+    static_configs:
+      - targets: ['broker:9090']
+        labels:
+          service: 'mqtt-broker'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
