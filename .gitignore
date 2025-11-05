@@ -147,3 +147,6 @@ data/
 *.db-wal
 certs/
 *.pem
+
+# Turbo
+.turbo

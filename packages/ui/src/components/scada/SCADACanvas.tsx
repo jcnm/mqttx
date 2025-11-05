@@ -35,8 +35,8 @@ export function SCADACanvas() {
         </div>
 
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg p-6">
-          <div className="text-orange-100 text-sm font-medium">Messages</div>
-          <div className="text-4xl font-bold text-white mt-2">{messages.length}</div>
+          <div className="text-orange-100 text-sm font-medium">Online Devices</div>
+          <div className="text-4xl font-bold text-white mt-2">{onlineDevices}</div>
         </div>
       </div>
 
