@@ -3,6 +3,9 @@
 
 import Aedes from 'aedes';
 import { createServer } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
+import { WebSocketServer } from 'ws';
+import websocketStream from 'websocket-stream';
 import type { ConfigLoader } from '../config/loader.js';
 import type { StateManager } from '@sparkplug/state';
 import { MessageType, parseTopic } from '@sparkplug/namespace';
@@ -18,6 +21,7 @@ export class SparkplugBroker {
   private config: ConfigLoader;
   private stateManager: StateManager;
   private tcpServer: ReturnType<typeof createServer> | null = null;
+  private wsServer: ReturnType<typeof createHttpServer> | null = null;
 
   constructor(options: BrokerOptions) {
     this.config = options.config;
@@ -192,12 +196,35 @@ export class SparkplugBroker {
     // Create TCP server
     this.tcpServer = createServer(this.aedes.handle);
 
-    return new Promise((resolve, reject) => {
+    // Create WebSocket server
+    this.wsServer = createHttpServer();
+    const wss = new WebSocketServer({ server: this.wsServer });
+
+    wss.on('connection', (ws, req) => {
+      // Wrap WebSocket in a duplex stream for Aedes
+      const stream = websocketStream(ws as any);
+      this.aedes.handle(stream);
+    });
+
+    // Start TCP server
+    await new Promise<void>((resolve, reject) => {
       this.tcpServer!.listen(mqttConfig.ports.tcp, (err?: Error) => {
         if (err) {
           reject(err);
         } else {
-          console.log(`MQTT broker listening on port ${mqttConfig.ports.tcp}`);
+          console.log(`✅ MQTT TCP broker listening on port ${mqttConfig.ports.tcp}`);
+          resolve();
+        }
+      });
+    });
+
+    // Start WebSocket server
+    await new Promise<void>((resolve, reject) => {
+      this.wsServer!.listen(mqttConfig.ports.ws, (err?: Error) => {
+        if (err) {
+          reject(err);
+        } else {
+          console.log(`✅ MQTT WebSocket broker listening on port ${mqttConfig.ports.ws}`);
           resolve();
         }
       });
@@ -211,11 +238,17 @@ export class SparkplugBroker {
       });
     }
 
+    if (this.wsServer) {
+      await new Promise<void>((resolve) => {
+        this.wsServer!.close(() => resolve());
+      });
+    }
+
     await new Promise<void>((resolve) => {
       this.aedes.close(() => resolve());
     });
 
-    console.log('MQTT broker stopped');
+    console.log('✅ MQTT broker stopped');
   }
 
   getAedes(): Aedes {
