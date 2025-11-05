@@ -53,38 +53,23 @@ export function ConnectionConfigPanel({ config, onChange, onTest }: ConnectionCo
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
 
-  // Initialize with defaults if config is null
+  // Initialize with defaults if config is null - only once on mount
   useEffect(() => {
     if (!config) {
       onChange(getDefaultConfig());
     }
-  }, [config, onChange]);
+  }, []); // Empty deps to run only once
 
-  // Return early if no config yet
+  // Show loading state while config is being initialized
   if (!config) {
-    return null;
+    return (
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+        <div className="flex items-center justify-center py-8">
+          <div className="text-slate-400">Loading configuration...</div>
+        </div>
+      </div>
+    );
   }
-
-  // Keep old useEffect for reference
-  useEffect(() => {
-    const defaultConfig: MQTTConnectionConfig = {
-      url: import.meta.env.VITE_BROKER_URL || 'ws://localhost:8083',
-      port: 8083,
-      protocol: 'ws',
-      clientId: `command-sender-${Math.random().toString(16).slice(2, 8)}`,
-      useTLS: false,
-      rejectUnauthorized: true,
-      cleanSession: true,
-      keepalive: 60,
-      reconnectPeriod: 5000,
-      qos: 1,
-    };
-
-    // Only set defaults if config is empty
-    if (!config.url) {
-      onChange(defaultConfig);
-    }
-  }, []);
 
   const handleTest = async () => {
     if (!onTest) return;

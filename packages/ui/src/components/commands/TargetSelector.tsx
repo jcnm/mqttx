@@ -3,7 +3,7 @@
  * Select existing nodes from simulator or define new ones on-the-fly
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSimulatorStore } from '../../stores/simulatorStore';
 import { useSCADAStore } from '../../stores/scadaStore';
 
@@ -45,10 +45,20 @@ export function TargetSelector({ target, onChange, allowDevice = true }: TargetS
   const { nodes: simNodes } = useSimulatorStore();
   const { nodes: scadaNodes } = useSCADAStore();
 
-  // Initialize with defaults if target is null
+  // Initialize with defaults if target is null - only once on mount
+  useEffect(() => {
+    if (!target) {
+      onChange(getDefaultTarget());
+    }
+  }, []);
+
+  // Show loading state while target is being initialized
   if (!target) {
-    onChange(getDefaultTarget());
-    return null;
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-slate-400">Loading target selection...</div>
+      </div>
+    );
   }
 
   const [showNewForm, setShowNewForm] = useState(target.mode === 'new');
