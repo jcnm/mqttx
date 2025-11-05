@@ -29,7 +29,7 @@ services:
       - "8883:8883"   # MQTT TCP TLS
       - "8083:8083"   # MQTT WebSocket
       - "8084:8084"   # MQTT WebSocket TLS
-      - "3000:3000"   # REST API
+      - "3001:3000"   # REST API
       - "9090:9090"   # Prometheus metrics
     environment:
       - NODE_ENV=production
@@ -62,7 +62,7 @@ services:
       - "5173:80"
     environment:
       - VITE_BROKER_URL=ws://localhost:8083
-      - VITE_API_URL=http://localhost:3000
+      - VITE_API_URL=http://localhost:3001
     depends_on:
       - broker
     networks:
@@ -90,7 +90,7 @@ services:
     image: grafana/grafana:latest
     container_name: sparkplug-grafana
     ports:
-      - "3001:3000"
+      - "3002:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
