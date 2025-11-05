@@ -8,7 +8,13 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
+      // Provide empty stubs for Node.js modules
+      'node:url': resolve(__dirname, './src/stubs/node-url.ts'),
+      'node:path': resolve(__dirname, './src/stubs/node-path.ts'),
     },
+  },
+  optimizeDeps: {
+    exclude: ['@sparkplug/codec'],
   },
   server: {
     port: 5173,
@@ -17,5 +23,8 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    rollupOptions: {
+      external: [],
+    },
   },
 });

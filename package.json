@@ -31,5 +31,10 @@
     "overrides": {
       "typescript": "^5.7.2"
     }
+  },
+  "dependencies": {
+    "@tanstack/react-table": "^8.0.0",
+    "date-fns": "^3.0.0",
+    "react-router-dom": "^7.0.0"
   }
 }
