@@ -138,8 +138,8 @@ export async function createServer(options: ServerOptions) {
   });
 
   // WebSocket for real-time updates
-  fastify.get('/ws', { websocket: true }, (connection, req) => {
-    const ws = connection.socket as any;
+  fastify.get('/ws', { websocket: true }, (connection: any, req) => {
+    const ws = connection.socket;
 
     ws.on('message', (message: any) => {
       // Handle WebSocket messages
