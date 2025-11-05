@@ -23,7 +23,7 @@ interface CommandState {
   selectedCommand: string | null;
 
   // Actions
-  createCommand: (command: Omit<Command, 'id' | 'createdAt'>) => string;
+  createCommand: (command: Omit<Command, 'id' | 'createdAt' | 'status'>) => string;
   updateCommand: (id: string, updates: Partial<Command>) => void;
   removeCommand: (id: string) => void;
 
