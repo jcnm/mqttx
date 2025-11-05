@@ -2,7 +2,7 @@
 
 ## Issues Fixed
 
-### Issue 1: Missing Lockfile
+### Issue 1: Missing Lockfile ✅ FIXED
 The `docker-compose up -d` command was failing with:
 ```
 ERR_PNPM_LOCKFILE_CONFIG_MISMATCH  Cannot proceed with the frozen installation
@@ -10,7 +10,7 @@ ERR_PNPM_LOCKFILE_CONFIG_MISMATCH  Cannot proceed with the frozen installation
 
 **Root Cause**: The Dockerfiles were using `pnpm install --frozen-lockfile` which requires a `pnpm-lock.yaml` file to exist.
 
-### Issue 2: Invalid Package Versions
+### Issue 2: Invalid Package Versions ✅ FIXED
 Build was failing with:
 ```
 ERR_PNPM_NO_MATCHING_VERSION  No matching version found for aedes@^0.51.4
@@ -18,6 +18,21 @@ The latest release of aedes is "0.51.3".
 ```
 
 **Root Cause**: Some packages specified versions that don't exist in npm registry.
+
+### Issue 3: TypeScript Compilation Errors ✅ FIXED
+Build was failing with multiple TypeScript errors:
+```
+TS1192: Module 'protobufjs' has no default export
+TS1343: The 'import.meta' meta-property is only allowed with certain module options
+TS2322: Type 'number' is not assignable to pako compression level type
+TS5083: Cannot read file '/app/tsconfig.json'
+```
+
+**Root Cause**:
+- protobufjs should use namespace import, not default import
+- moduleResolution "bundler" incompatible with Node.js environment
+- tsconfig.json wasn't copied to Docker build context
+- Type mismatches in pako compression level
 
 ## Solutions Applied
 
@@ -40,6 +55,21 @@ The latest release of aedes is "0.51.3".
 - `aedes`: `^0.51.4` → `^0.51.3` (latest available)
 - `aedes-persistence-redis`: `^9.1.0` → `^11.0.0` (latest stable)
 - `pino-pretty`: `^13.0.0` → `^13.1.0` (latest stable)
+
+### Fix 3: TypeScript Compilation Issues
+
+**Updated `tsconfig.json`**:
+- `moduleResolution`: `"bundler"` → `"node"` (for Node.js compatibility)
+- Added: `"allowSyntheticDefaultImports": true`
+
+**Updated `packages/codec/src/encoder.ts` and `decoder.ts`**:
+- Changed: `import protobuf from 'protobufjs'` → `import * as protobuf from 'protobufjs'`
+
+**Updated `packages/codec/src/encoder.ts` and `compression.ts`**:
+- Fixed pako type: `{ level }` → `{ level: level as any }`
+
+**Updated Dockerfiles**:
+- Added `tsconfig.json` to COPY commands in both broker and UI Dockerfiles
 
 ## How to Run Now
 
@@ -168,10 +198,14 @@ pnpm dev
 
 ## Files Changed
 
-- `docker/Dockerfile.broker` - Updated pnpm install flags
-- `docker/Dockerfile.ui` - Updated pnpm install flags
+- `docker/Dockerfile.broker` - Updated pnpm install flags, added tsconfig.json
+- `docker/Dockerfile.ui` - Updated pnpm install flags, added tsconfig.json
 - `.gitignore` - Removed pnpm-lock.yaml from ignore list
 - `packages/broker/package.json` - Fixed package versions
+- `tsconfig.json` - Fixed moduleResolution and added allowSyntheticDefaultImports
+- `packages/codec/src/encoder.ts` - Fixed protobufjs import and pako types
+- `packages/codec/src/decoder.ts` - Fixed protobufjs import
+- `packages/codec/src/compression.ts` - Fixed pako types
 
 ## Commits
 
@@ -184,6 +218,9 @@ claude/sparkplug-mqtt-scada-platform-011CUodRGtU7Wh5vBkKufodA
 - `95eb61d` - Remove frozen lockfile requirement
 - `2efa027` - Add Docker build fix documentation
 - `4057a11` - Update package versions to match npm registry
+- `db48bd4` - Update Docker fix documentation with package version fixes
+- `f52e3b0` - Add comprehensive project summary
+- `ffe0c1e` - Resolve TypeScript compilation errors in Docker builds
 
 ---
 
