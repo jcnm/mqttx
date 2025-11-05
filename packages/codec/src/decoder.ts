@@ -5,7 +5,7 @@ import * as protobuf from 'protobufjs';
 import { ungzip } from 'pako';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import type { DecodedPayload, DecoderOptions } from './types.js';
+import type { DecodedPayload, DecoderOptions, Metric } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -107,13 +107,13 @@ export function getBdSeq(payload: DecodedPayload): bigint | null {
 export function getMetricByName(
   payload: DecodedPayload,
   name: string
-): DecodedPayload['metrics'][0] | null {
-  return payload.metrics?.find((m) => m.name === name) ?? null;
+): Metric | undefined {
+  return payload.metrics?.find((m) => m.name === name);
 }
 
 export function getMetricByAlias(
   payload: DecodedPayload,
   alias: bigint
-): DecodedPayload['metrics'][0] | null {
-  return payload.metrics?.find((m) => m.alias === alias) ?? null;
+): Metric | undefined {
+  return payload.metrics?.find((m) => m.alias === alias);
 }
