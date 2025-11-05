@@ -1,17 +1,27 @@
-# 🔧 Docker Build Fix Applied
+# 🔧 Docker Build Fixes Applied
 
-## Issue
+## Issues Fixed
+
+### Issue 1: Missing Lockfile
 The `docker-compose up -d` command was failing with:
 ```
 ERR_PNPM_LOCKFILE_CONFIG_MISMATCH  Cannot proceed with the frozen installation
 ```
 
-## Root Cause
-The Dockerfiles were using `pnpm install --frozen-lockfile` which requires a `pnpm-lock.yaml` file to exist. Since this is a fresh project, no lockfile existed yet.
+**Root Cause**: The Dockerfiles were using `pnpm install --frozen-lockfile` which requires a `pnpm-lock.yaml` file to exist.
 
-## Solution Applied
+### Issue 2: Invalid Package Versions
+Build was failing with:
+```
+ERR_PNPM_NO_MATCHING_VERSION  No matching version found for aedes@^0.51.4
+The latest release of aedes is "0.51.3".
+```
 
-### Changes Made:
+**Root Cause**: Some packages specified versions that don't exist in npm registry.
+
+## Solutions Applied
+
+### Fix 1: Lockfile Issue
 
 1. **Updated `docker/Dockerfile.broker`**:
    - Changed `pnpm install --frozen-lockfile` → `pnpm install --no-frozen-lockfile`
@@ -22,7 +32,14 @@ The Dockerfiles were using `pnpm install --frozen-lockfile` which requires a `pn
    - Removed `pnpm-lock.yaml*` from COPY commands
 
 3. **Updated `.gitignore`**:
-   - Removed `pnpm-lock.yaml` from ignore list (in case you want to commit it later)
+   - Removed `pnpm-lock.yaml` from ignore list
+
+### Fix 2: Package Version Issues
+
+**Updated `packages/broker/package.json`**:
+- `aedes`: `^0.51.4` → `^0.51.3` (latest available)
+- `aedes-persistence-redis`: `^9.1.0` → `^11.0.0` (latest stable)
+- `pino-pretty`: `^13.0.0` → `^13.1.0` (latest stable)
 
 ## How to Run Now
 
@@ -149,19 +166,24 @@ cd packages/ui
 pnpm dev
 ```
 
-## Files Changed in This Fix
+## Files Changed
 
 - `docker/Dockerfile.broker` - Updated pnpm install flags
 - `docker/Dockerfile.ui` - Updated pnpm install flags
 - `.gitignore` - Removed pnpm-lock.yaml from ignore list
+- `packages/broker/package.json` - Fixed package versions
 
-## Committed & Pushed
+## Commits
 
-All fixes have been committed and pushed to:
+All fixes have been committed and pushed to branch:
 ```
-Branch: claude/sparkplug-mqtt-scada-platform-011CUodRGtU7Wh5vBkKufodA
-Commit: 95eb61d
+claude/sparkplug-mqtt-scada-platform-011CUodRGtU7Wh5vBkKufodA
 ```
+
+**Commits**:
+- `95eb61d` - Remove frozen lockfile requirement
+- `2efa027` - Add Docker build fix documentation
+- `4057a11` - Update package versions to match npm registry
 
 ---
 
