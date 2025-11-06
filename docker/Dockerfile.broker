@@ -1,0 +1,70 @@
+# Sparkplug MQTT Broker Dockerfile
+FROM node:23-alpine AS base
+
+# Install pnpm
+RUN npm install -g pnpm@9.15.1
+
+WORKDIR /app
+
+# Copy workspace files
+COPY pnpm-workspace.yaml package.json tsconfig.json ./
+COPY turbo.json ./
+
+# Copy package files
+COPY packages/codec/package.json ./packages/codec/
+COPY packages/namespace/package.json ./packages/namespace/
+COPY packages/state/package.json ./packages/state/
+COPY packages/broker/package.json ./packages/broker/
+
+# Install dependencies
+RUN pnpm install --no-frozen-lockfile
+
+# Copy source code
+COPY packages/codec ./packages/codec
+COPY packages/namespace ./packages/namespace
+COPY packages/state ./packages/state
+COPY packages/broker ./packages/broker
+
+# Build packages
+RUN pnpm --filter @sparkplug/codec build
+RUN pnpm --filter @sparkplug/namespace build
+RUN pnpm --filter @sparkplug/state build
+RUN pnpm --filter @sparkplug/broker build
+
+# Production stage
+FROM node:23-alpine
+
+RUN npm install -g pnpm@9.15.1
+
+WORKDIR /app
+
+# Copy workspace configuration
+COPY --from=base /app/pnpm-workspace.yaml ./
+COPY --from=base /app/package.json ./
+
+# Copy built packages with their package.json files
+COPY --from=base /app/packages/codec/dist ./packages/codec/dist
+COPY --from=base /app/packages/codec/package.json ./packages/codec/
+COPY --from=base /app/packages/codec/proto ./packages/codec/proto
+
+COPY --from=base /app/packages/namespace/dist ./packages/namespace/dist
+COPY --from=base /app/packages/namespace/package.json ./packages/namespace/
+
+COPY --from=base /app/packages/state/dist ./packages/state/dist
+COPY --from=base /app/packages/state/package.json ./packages/state/
+
+COPY --from=base /app/packages/broker/dist ./packages/broker/dist
+COPY --from=base /app/packages/broker/package.json ./packages/broker/
+COPY --from=base /app/packages/broker/config ./packages/broker/config
+
+# Install production dependencies only
+RUN pnpm install --prod --no-frozen-lockfile
+
+WORKDIR /app/packages/broker
+
+# Expose ports
+EXPOSE 1883 8883 8083 8084 3000 9090
+
+ENV NODE_ENV=production
+
+CMD ["node", "dist/index.js"]
