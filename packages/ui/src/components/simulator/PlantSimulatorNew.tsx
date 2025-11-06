@@ -11,7 +11,12 @@ import { SimulatorControls } from './SimulatorControls';
 import { ConfigPanel } from './ConfigPanel';
 import { ToolPanel } from './ToolPanel';
 import { createSimulationEngine } from '../../services/simulationEngine';
-import type { SimulatedEoN, EoNNodeData, SimulatorNode } from '../../types/simulator.types';
+import type {
+  SimulatedEoN,
+  SimulatedDevice,
+  EoNNodeData,
+  SimulatorNode,
+} from '../../types/simulator.types';
 import {
   useNodesState,
   useEdgesState,
@@ -107,45 +112,195 @@ export function PlantSimulatorNew() {
     }
   }, []);
 
+  // Create node configuration based on type
+  const createNodeFromType = useCallback(
+    (nodeType: string, position: { x: number; y: number }) => {
+      const nodeId = `node-${Date.now()}`;
+      const baseNodeNumber = storeNodes.size + 1;
+
+      // Base configuration
+      const baseConfig = {
+        groupId: 'Group1',
+        edgeNodeId: `${nodeType.toUpperCase()}_${baseNodeNumber}`,
+        protocol: 'SparkplugB' as const,
+        sparkplugConfig: {
+          bdSeqStrategy: 'sequential' as const,
+          rebirthTimeout: 60,
+        },
+        lifecycle: {
+          autoReconnect: true,
+          reconnectDelay: 5000,
+        },
+        network: {
+          qos: 1 as 0 | 1 | 2,
+          cleanSession: true,
+        },
+        persistence: {
+          enabled: false,
+        },
+      };
+
+      let devices: SimulatedDevice[] = [];
+
+      // Customize based on node type
+      switch (nodeType) {
+        case 'eon':
+          // Basic EoN with no devices
+          break;
+
+        case 'device':
+          devices = [
+            {
+              id: `device-${Date.now()}`,
+              deviceId: `Device_${baseNodeNumber}`,
+              protocol: 'SparkplugB',
+              metrics: [
+                { name: 'Status', datatype: 11, value: true },
+                { name: 'Value', datatype: 9, value: 0 },
+              ],
+              dataProduction: {
+                frequency: 1000,
+                logic: { type: 'random', params: {} },
+                enabled: true,
+              },
+              state: 'stopped',
+            },
+          ];
+          break;
+
+        case 'sensor':
+          devices = [
+            {
+              id: `sensor-${Date.now()}`,
+              deviceId: `Sensor_${baseNodeNumber}`,
+              protocol: 'SparkplugB',
+              metrics: [
+                {
+                  name: 'Temperature',
+                  datatype: 9,
+                  value: 25.0,
+                  properties: { engineeringUnits: '°C', min: -40, max: 125 },
+                },
+                {
+                  name: 'Pressure',
+                  datatype: 9,
+                  value: 101.3,
+                  properties: { engineeringUnits: 'kPa', min: 0, max: 200 },
+                },
+                {
+                  name: 'Humidity',
+                  datatype: 9,
+                  value: 45.0,
+                  properties: { engineeringUnits: '%', min: 0, max: 100 },
+                },
+              ],
+              dataProduction: {
+                frequency: 1000,
+                logic: { type: 'sine', params: { min: 20, max: 30, frequency: 0.1 } },
+                enabled: true,
+              },
+              state: 'stopped',
+            },
+          ];
+          break;
+
+        case 'actuator':
+          devices = [
+            {
+              id: `actuator-${Date.now()}`,
+              deviceId: `Actuator_${baseNodeNumber}`,
+              protocol: 'SparkplugB',
+              metrics: [
+                { name: 'Command', datatype: 11, value: false },
+                {
+                  name: 'Position',
+                  datatype: 9,
+                  value: 0,
+                  properties: { engineeringUnits: '%', min: 0, max: 100 },
+                },
+                {
+                  name: 'Speed',
+                  datatype: 9,
+                  value: 0,
+                  properties: { engineeringUnits: 'RPM', min: 0, max: 3000 },
+                },
+                {
+                  name: 'Current',
+                  datatype: 9,
+                  value: 0,
+                  properties: { engineeringUnits: 'A', min: 0, max: 50 },
+                },
+              ],
+              dataProduction: {
+                frequency: 500,
+                logic: { type: 'random', params: {} },
+                enabled: true,
+              },
+              state: 'stopped',
+            },
+          ];
+          break;
+
+        case 'controller':
+          devices = [
+            {
+              id: `plc-${Date.now()}`,
+              deviceId: `PLC_${baseNodeNumber}`,
+              protocol: 'SparkplugB',
+              metrics: [
+                {
+                  name: 'AI_1',
+                  datatype: 9,
+                  value: 0,
+                  properties: { engineeringUnits: 'V', min: 0, max: 10 },
+                },
+                {
+                  name: 'AI_2',
+                  datatype: 9,
+                  value: 0,
+                  properties: { engineeringUnits: 'V', min: 0, max: 10 },
+                },
+                { name: 'DI_1', datatype: 11, value: false },
+                { name: 'DI_2', datatype: 11, value: false },
+                { name: 'DO_1', datatype: 11, value: false },
+                { name: 'DO_2', datatype: 11, value: false },
+              ],
+              dataProduction: {
+                frequency: 2000,
+                logic: { type: 'random', params: {} },
+                enabled: true,
+              },
+              state: 'stopped',
+            },
+          ];
+          break;
+      }
+
+      const newNode: SimulatedEoN = {
+        id: nodeId,
+        position,
+        config: baseConfig,
+        devices,
+        state: 'stopped',
+        metrics: [],
+      };
+
+      return newNode;
+    },
+    [storeNodes.size]
+  );
+
   // Handle drop on canvas
   const handleCanvasDrop = useCallback(
     (position: { x: number; y: number }, data: any) => {
       console.log('🎯 Drop received:', position, data);
-      const { type } = data;
+      const { type, nodeType } = data;
 
       if (type === 'create-node') {
-        // Create new node at drop position
-        const nodeId = `node-${Date.now()}`;
-        const newNode: SimulatedEoN = {
-          id: nodeId,
-          position,
-          config: {
-            groupId: 'Group1',
-            edgeNodeId: `Node${storeNodes.size + 1}`,
-            protocol: 'SparkplugB',
-            sparkplugConfig: {
-              bdSeqStrategy: 'sequential',
-              rebirthTimeout: 60,
-            },
-            lifecycle: {
-              autoReconnect: true,
-              reconnectDelay: 5000,
-            },
-            network: {
-              qos: 1,
-              cleanSession: true,
-            },
-            persistence: {
-              enabled: false,
-            },
-          },
-          devices: [],
-          state: 'stopped',
-          metrics: [],
-        };
-
+        // Create new node at drop position with proper type
+        const newNode = createNodeFromType(nodeType || 'eon', position);
         addNode(newNode);
-        setSelectedNodeId(nodeId);
+        setSelectedNodeId(newNode.id);
       } else if (type === 'create-device') {
         // Add device to selected node or create standalone
         console.log('Create device:', data);
@@ -169,7 +324,7 @@ export function PlantSimulatorNew() {
         });
       }
     },
-    [storeNodes.size, addNode]
+    [createNodeFromType, addNode]
   );
 
   // Handle node click
@@ -207,7 +362,7 @@ export function PlantSimulatorNew() {
           reconnectDelay: 5000,
         },
         network: {
-          qos: 1,
+          qos: 1 as 0 | 1 | 2,
           cleanSession: true,
         },
         persistence: {
