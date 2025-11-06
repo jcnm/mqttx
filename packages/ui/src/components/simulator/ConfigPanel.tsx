@@ -3,7 +3,7 @@
  * Dynamic panel for configuring selected EoN nodes or devices
  */
 
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useSimulatorStore } from '../../stores/simulatorStore';
 import { MetricEditor } from './MetricEditor';
 import type { MetricDefinition, SimulatedEoN } from '../../types/simulator.types';
@@ -21,16 +21,69 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
   const [activeTab, setActiveTab] = useState<TabType>('identity');
   const [showMetricEditor, setShowMetricEditor] = useState(false);
   const [editingMetric, setEditingMetric] = useState<MetricDefinition | undefined>();
+  const [panelWidth, setPanelWidth] = useState(384); // Default 384px (w-96)
+  const [isResizing, setIsResizing] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Handle resize
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isResizing) return;
+      // For right panel, we calculate from the right side of the viewport
+      const newWidth = Math.max(320, Math.min(800, window.innerWidth - e.clientX));
+      setPanelWidth(newWidth);
+    },
+    [isResizing]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  // Add/remove event listeners
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isResizing, handleMouseMove, handleMouseUp]);
 
   // Get the selected node data - use props or store
   const node = propsNode || (selectedNode ? nodes.get(selectedNode) : null);
 
   if (!node) {
     return (
-      <div className="w-96 bg-slate-900 border-l border-slate-700 p-6 flex items-center justify-center">
+      <div
+        ref={panelRef}
+        className="relative bg-slate-900 border-l border-slate-700 p-6 flex items-center justify-center"
+        style={{ width: panelWidth, minWidth: panelWidth }}
+      >
         <div className="text-center text-slate-500">
           <div className="text-4xl mb-2">👈</div>
           <p>Select a node or device to configure</p>
+        </div>
+
+        {/* Resize Handle - on left edge for right panel */}
+        <div
+          onMouseDown={handleMouseDown}
+          className={`
+            absolute top-0 left-0 bottom-0 w-1 cursor-ew-resize
+            hover:bg-emerald-500 transition-colors z-20
+            ${isResizing ? 'bg-emerald-500' : 'bg-transparent'}
+          `}
+          title="Drag to resize"
+        >
+          {/* Visual indicator */}
+          <div className="absolute top-1/2 -translate-y-1/2 left-0 w-1 h-12 bg-slate-600 rounded-r" />
         </div>
       </div>
     );
@@ -94,7 +147,25 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
   ];
 
   return (
-    <div className="w-96 bg-slate-900 border-l border-slate-700 flex flex-col max-h-full overflow-hidden">
+    <div
+      ref={panelRef}
+      className="relative bg-slate-900 border-l border-slate-700 flex flex-col max-h-full overflow-hidden"
+      style={{ width: panelWidth, minWidth: panelWidth }}
+    >
+      {/* Resize Handle - on left edge for right panel */}
+      <div
+        onMouseDown={handleMouseDown}
+        className={`
+          absolute top-0 left-0 bottom-0 w-1 cursor-ew-resize
+          hover:bg-emerald-500 transition-colors z-20
+          ${isResizing ? 'bg-emerald-500' : 'bg-transparent'}
+        `}
+        title="Drag to resize"
+      >
+        {/* Visual indicator */}
+        <div className="absolute top-1/2 -translate-y-1/2 left-0 w-1 h-12 bg-slate-600 rounded-r" />
+      </div>
+
       {/* Header */}
       <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white">
