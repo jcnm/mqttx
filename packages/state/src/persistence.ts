@@ -25,6 +25,7 @@ export class StatePersistence {
       db: options.db || 0,
       password: options.password,
       lazyConnect: true,
+      connectTimeout: 10000, // 10 seconds timeout for initial connection
       retryStrategy: (times: number) => {
         // Stop retrying after 10 attempts (~30 seconds total)
         if (times > 10) {
@@ -32,7 +33,9 @@ export class StatePersistence {
           return null;
         }
         // Exponential backoff: 1s, 2s, 3s, 4s, 5s... max 5s
-        return Math.min(times * 1000, 5000);
+        const delay = Math.min(times * 1000, 5000);
+        console.log(`   Retry ${times}/10 in ${delay}ms...`);
+        return delay;
       },
     });
 

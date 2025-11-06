@@ -23,11 +23,20 @@ async function main() {
 
   // Initialize Redis persistence
   const redisConfig = config.getRedisConfig();
+
+  // Override with environment variables if set (for Docker)
+  const redisHost = process.env.REDIS_HOST || redisConfig.host;
+  const redisPort = process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT) : redisConfig.port;
+  const redisDb = process.env.REDIS_DB ? parseInt(process.env.REDIS_DB) : redisConfig.db;
+  const redisPassword = process.env.REDIS_PASSWORD || redisConfig.password;
+
+  console.log(`📡 Connecting to Redis at ${redisHost}:${redisPort}...`);
+
   const persistence = new StatePersistence({
-    host: redisConfig.host,
-    port: redisConfig.port,
-    db: redisConfig.db,
-    password: redisConfig.password || undefined,
+    host: redisHost,
+    port: redisPort,
+    db: redisDb,
+    password: redisPassword || undefined,
     keyPrefix: 'sparkplug:',
   });
 
@@ -35,7 +44,10 @@ async function main() {
     await persistence.connect();
     console.log('✅ Redis persistence connected');
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     console.warn('⚠️  Redis not available, using in-memory storage');
+    console.warn(`   Reason: ${errorMessage}`);
+    console.warn(`   Tried: ${redisHost}:${redisPort}`);
   }
 
   // Initialize MQTT broker
