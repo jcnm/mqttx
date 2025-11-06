@@ -4,10 +4,10 @@ import { useMQTTStore } from './stores/mqttStore';
 import { useBrokerStore } from './stores/brokerStore';
 import { Header } from './components/layout/Header';
 
-// Placeholder components (will be created next)
+// Components
 import { SCADAView } from './components/scada/SCADAView';
 import { BrokerViewer } from './components/broker/BrokerViewer';
-import { PlantSimulator } from './components/simulator/PlantSimulator';
+import { PlantSimulatorNew } from './components/simulator/PlantSimulatorNew';
 import { CommandPanel } from './components/commands/CommandPanel';
 
 function App() {
@@ -39,7 +39,7 @@ function App() {
             <Route path="/" element={<Navigate to="/scada" replace />} />
             <Route path="/scada" element={<SCADAView />} />
             <Route path="/broker" element={<BrokerViewer />} />
-            <Route path="/simulator" element={<PlantSimulator />} />
+            <Route path="/simulator" element={<PlantSimulatorNew />} />
             <Route path="/commands" element={<CommandPanel />} />
           </Routes>
         </main>

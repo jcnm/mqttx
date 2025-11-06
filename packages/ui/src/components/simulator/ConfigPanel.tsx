@@ -6,18 +6,24 @@
 import { useState } from 'react';
 import { useSimulatorStore } from '../../stores/simulatorStore';
 import { MetricEditor } from './MetricEditor';
-import type { MetricDefinition } from '../../types/simulator.types';
+import type { MetricDefinition, SimulatedEoN } from '../../types/simulator.types';
 
 type TabType = 'identity' | 'configuration' | 'metrics' | 'lifecycle';
 
-export function ConfigPanel() {
+interface ConfigPanelProps {
+  node?: SimulatedEoN;
+  onClose?: () => void;
+  onUpdate?: (updates: Partial<SimulatedEoN>) => void;
+}
+
+export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: propsOnUpdate }: ConfigPanelProps = {}) {
   const { selectedNode, nodes, updateNode, setSelectedNode } = useSimulatorStore();
   const [activeTab, setActiveTab] = useState<TabType>('identity');
   const [showMetricEditor, setShowMetricEditor] = useState(false);
   const [editingMetric, setEditingMetric] = useState<MetricDefinition | undefined>();
 
-  // Get the selected node data
-  const node = selectedNode ? nodes.get(selectedNode) : null;
+  // Get the selected node data - use props or store
+  const node = propsNode || (selectedNode ? nodes.get(selectedNode) : null);
 
   if (!node) {
     return (
@@ -33,11 +39,23 @@ export function ConfigPanel() {
   const isEoN = node.config !== undefined;
 
   const handleClose = () => {
-    setSelectedNode(null);
+    if (propsOnClose) {
+      propsOnClose();
+    } else {
+      setSelectedNode(null);
+    }
+  };
+
+  const handleUpdate = (updates: Partial<SimulatedEoN>) => {
+    if (propsOnUpdate) {
+      propsOnUpdate(updates);
+    } else if (selectedNode) {
+      updateNode(selectedNode, updates);
+    }
   };
 
   const handleSaveMetric = (metric: MetricDefinition) => {
-    if (!selectedNode) return;
+    if (!node) return;
 
     const existingMetrics = node.metrics || [];
     const metricIndex = existingMetrics.findIndex((m) => m.name === metric.name);
@@ -52,15 +70,15 @@ export function ConfigPanel() {
       updatedMetrics = [...existingMetrics, metric];
     }
 
-    updateNode(selectedNode, { ...node, metrics: updatedMetrics });
+    handleUpdate({ ...node, metrics: updatedMetrics });
     setShowMetricEditor(false);
     setEditingMetric(undefined);
   };
 
   const handleDeleteMetric = (metricName: string) => {
-    if (!selectedNode) return;
+    if (!node) return;
     const updatedMetrics = (node.metrics || []).filter((m) => m.name !== metricName);
-    updateNode(selectedNode, { ...node, metrics: updatedMetrics });
+    handleUpdate({ ...node, metrics: updatedMetrics });
   };
 
   const handleEditMetric = (metric: MetricDefinition) => {

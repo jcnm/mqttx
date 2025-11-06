@@ -17,8 +17,8 @@ export function Header({ isConnected }: HeaderProps) {
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-white">Sparkplug MQTT SCADA</h1>
-            <p className="text-xs text-slate-400">ISO/IEC 20237:2023 Compliant</p>
+            <h1 className="text-xl font-bold text-white">Sparkplug B MQTT Analyser</h1>
+            <p className="text-xs text-slate-400">ISO/IEC 20237:2023 Compliant • Industrial SCADA Platform</p>
           </div>
 
           <div className="flex items-center gap-2">

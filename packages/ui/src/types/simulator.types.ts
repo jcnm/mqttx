@@ -111,8 +111,9 @@ export interface NodeTemplate {
   id: string;
   name: string;
   description: string;
-  type: 'eon' | 'device';
-  config: Partial<SimulatedEoNConfig> | Partial<SimulatedDevice>;
+  type: 'eon' | 'device' | 'plant'; // 'plant' for multi-node templates
+  category?: string; // e.g., 'Manufacturing', 'Oil & Gas', 'Water Treatment'
+  config: Array<Partial<SimulatedEoN>> | Partial<SimulatedEoNConfig> | Partial<SimulatedDevice>; // Array for plant templates
   icon?: string;
 }
 
