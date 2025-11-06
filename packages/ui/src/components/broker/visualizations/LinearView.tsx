@@ -18,9 +18,28 @@ import type { BrokerLog } from '../../../types/broker.types';
 
 interface LinearViewProps {
   logs: BrokerLog[];
+  decodeSparkplug?: boolean;
 }
 
-export function LinearView({ logs }: LinearViewProps) {
+// Helper to decode payload
+function decodePayload(payload: Uint8Array, decodeAsSparkplug: boolean) {
+  try {
+    const text = new TextDecoder().decode(payload);
+    if (decodeAsSparkplug) {
+      // Try to parse as JSON (for now, simulated messages are JSON)
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    }
+    return text;
+  } catch {
+    return '<binary data>';
+  }
+}
+
+export function LinearView({ logs, decodeSparkplug = true }: LinearViewProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'timestamp', desc: true }]);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -255,9 +274,12 @@ export function LinearView({ logs }: LinearViewProps) {
                             </button>
                           </div>
                           <pre className="text-xs text-slate-300 bg-slate-900 rounded p-3 overflow-x-auto font-mono max-h-64 overflow-y-auto">
-                            {row.original.decoded
-                              ? JSON.stringify(row.original.decoded, null, 2)
-                              : new TextDecoder().decode(row.original.payload)}
+                            {(() => {
+                              const decoded = decodePayload(row.original.payload, decodeSparkplug);
+                              return typeof decoded === 'object'
+                                ? JSON.stringify(decoded, null, 2)
+                                : decoded;
+                            })()}
                           </pre>
                         </div>
                       </td>

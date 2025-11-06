@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSimulatorStore } from '../../stores/simulatorStore';
 import { useMQTTStore } from '../../stores/mqttStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { EnhancedReactFlowCanvas } from './EnhancedReactFlowCanvas';
 import { SimulatorControls } from './SimulatorControls';
 import { ConfigPanel } from './ConfigPanel';
@@ -38,6 +39,7 @@ export function PlantSimulatorNew() {
   } = useSimulatorStore();
 
   const { client: mqttClient, isConnected } = useMQTTStore();
+  const { simulatorDefaults } = useSettingsStore();
 
   // UI State
   const [toolPanelOpen, setToolPanelOpen] = useState(true);
@@ -118,22 +120,22 @@ export function PlantSimulatorNew() {
       const nodeId = `node-${Date.now()}`;
       const baseNodeNumber = storeNodes.size + 1;
 
-      // Base configuration
+      // Base configuration using simulator defaults
       const baseConfig = {
-        groupId: 'Group1',
+        groupId: simulatorDefaults.groupId,
         edgeNodeId: `${nodeType.toUpperCase()}_${baseNodeNumber}`,
         protocol: 'SparkplugB' as const,
         sparkplugConfig: {
-          bdSeqStrategy: 'sequential' as const,
-          rebirthTimeout: 60,
+          bdSeqStrategy: simulatorDefaults.bdSeqStrategy,
+          rebirthTimeout: simulatorDefaults.rebirthTimeout,
         },
         lifecycle: {
-          autoReconnect: true,
-          reconnectDelay: 5000,
+          autoReconnect: simulatorDefaults.autoReconnect,
+          reconnectDelay: simulatorDefaults.reconnectDelay,
         },
         network: {
-          qos: 1 as 0 | 1 | 2,
-          cleanSession: true,
+          qos: simulatorDefaults.qos,
+          cleanSession: simulatorDefaults.cleanSession,
         },
         persistence: {
           enabled: false,
@@ -287,14 +289,100 @@ export function PlantSimulatorNew() {
 
       return newNode;
     },
-    [storeNodes.size]
+    [storeNodes.size, simulatorDefaults]
+  );
+
+  // Create device configuration based on type
+  const createDeviceFromType = useCallback(
+    (deviceType: string): SimulatedDevice => {
+      const deviceId = `device-${Date.now()}`;
+      const deviceNumber = storeNodes.size + 1;
+
+      // Base device configuration
+      let metrics: MetricDefinition[] = [];
+      let deviceName = '';
+
+      switch (deviceType) {
+        case 'analog-input':
+          deviceName = `AI_${deviceNumber}`;
+          metrics = [
+            {
+              name: 'Value',
+              datatype: 9, // Float
+              value: 0,
+              properties: { engineeringUnits: 'V', min: 0, max: 10 },
+              logic: { type: 'sine', params: { min: 0, max: 10, frequency: 0.1 } },
+            },
+            { name: 'Online', datatype: 11, value: true },
+          ];
+          break;
+
+        case 'digital-input':
+          deviceName = `DI_${deviceNumber}`;
+          metrics = [
+            { name: 'State', datatype: 11, value: false },
+            { name: 'Online', datatype: 11, value: true },
+          ];
+          break;
+
+        case 'analog-output':
+          deviceName = `AO_${deviceNumber}`;
+          metrics = [
+            {
+              name: 'Setpoint',
+              datatype: 9,
+              value: 0,
+              properties: { engineeringUnits: 'V', min: 0, max: 10 },
+            },
+            {
+              name: 'Feedback',
+              datatype: 9,
+              value: 0,
+              properties: { engineeringUnits: 'V', min: 0, max: 10 },
+              logic: { type: 'random', params: { min: 0, max: 10 } },
+            },
+            { name: 'Online', datatype: 11, value: true },
+          ];
+          break;
+
+        case 'digital-output':
+          deviceName = `DO_${deviceNumber}`;
+          metrics = [
+            { name: 'Command', datatype: 11, value: false },
+            { name: 'State', datatype: 11, value: false },
+            { name: 'Online', datatype: 11, value: true },
+          ];
+          break;
+
+        default:
+          deviceName = `Device_${deviceNumber}`;
+          metrics = [
+            { name: 'Value', datatype: 9, value: 0 },
+            { name: 'Online', datatype: 11, value: true },
+          ];
+      }
+
+      return {
+        id: deviceId,
+        deviceId: deviceName,
+        protocol: 'SparkplugB',
+        metrics,
+        dataProduction: {
+          frequency: simulatorDefaults.dataFrequency,
+          logic: { type: 'random', params: {} },
+          enabled: true,
+        },
+        state: 'stopped',
+      };
+    },
+    [storeNodes.size, simulatorDefaults.dataFrequency]
   );
 
   // Handle drop on canvas
   const handleCanvasDrop = useCallback(
     (position: { x: number; y: number }, data: any) => {
       console.log('🎯 Drop received:', position, data);
-      const { type, nodeType } = data;
+      const { type, nodeType, deviceType } = data;
 
       if (type === 'create-node') {
         // Create new node at drop position with proper type
@@ -302,8 +390,25 @@ export function PlantSimulatorNew() {
         addNode(newNode);
         setSelectedNodeId(newNode.id);
       } else if (type === 'create-device') {
-        // Add device to selected node or create standalone
-        console.log('Create device:', data);
+        // Add device to selected node or create new EoN with device
+        const newDevice = createDeviceFromType(deviceType);
+
+        if (selectedNodeId) {
+          // Add to selected node
+          const selectedNode = storeNodes.get(selectedNodeId);
+          if (selectedNode) {
+            const updatedDevices = [...selectedNode.devices, newDevice];
+            updateNode(selectedNodeId, { devices: updatedDevices });
+            console.log(`✅ Added device ${newDevice.deviceId} to node ${selectedNode.config.edgeNodeId}`);
+          }
+        } else {
+          // Create new EoN node with this device
+          const newNode = createNodeFromType('eon', position);
+          newNode.devices = [newDevice];
+          addNode(newNode);
+          setSelectedNodeId(newNode.id);
+          console.log(`✅ Created new EoN node with device ${newDevice.deviceId}`);
+        }
       } else if (type === 'load-template') {
         // Load template at position
         const { template } = data;
@@ -324,7 +429,7 @@ export function PlantSimulatorNew() {
         });
       }
     },
-    [createNodeFromType, addNode]
+    [createNodeFromType, createDeviceFromType, addNode, selectedNodeId, storeNodes, updateNode]
   );
 
   // Handle node click
@@ -350,20 +455,20 @@ export function PlantSimulatorNew() {
         y: 100 + (storeNodes.size % 3) * 150,
       },
       config: {
-        groupId: 'Group1',
+        groupId: simulatorDefaults.groupId,
         edgeNodeId: `Node${storeNodes.size + 1}`,
         protocol: 'SparkplugB',
         sparkplugConfig: {
-          bdSeqStrategy: 'sequential',
-          rebirthTimeout: 60,
+          bdSeqStrategy: simulatorDefaults.bdSeqStrategy,
+          rebirthTimeout: simulatorDefaults.rebirthTimeout,
         },
         lifecycle: {
-          autoReconnect: true,
-          reconnectDelay: 5000,
+          autoReconnect: simulatorDefaults.autoReconnect,
+          reconnectDelay: simulatorDefaults.reconnectDelay,
         },
         network: {
-          qos: 1 as 0 | 1 | 2,
-          cleanSession: true,
+          qos: simulatorDefaults.qos,
+          cleanSession: simulatorDefaults.cleanSession,
         },
         persistence: {
           enabled: false,

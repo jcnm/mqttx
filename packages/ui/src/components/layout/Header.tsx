@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 
 interface HeaderProps {
   isConnected: boolean;
+  onOpenSettings?: () => void;
 }
 
 const navLinks = [
@@ -11,7 +12,7 @@ const navLinks = [
   { path: '/commands', label: 'Commands', icon: '📡' },
 ];
 
-export function Header({ isConnected }: HeaderProps) {
+export function Header({ isConnected, onOpenSettings }: HeaderProps) {
   return (
     <header className="bg-slate-900 border-b border-slate-800">
       <div className="px-6 py-4">
@@ -21,15 +22,28 @@ export function Header({ isConnected }: HeaderProps) {
             <p className="text-xs text-slate-400">ISO/IEC 20237:2023 Compliant • Industrial SCADA Platform</p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-2.5 h-2.5 rounded-full ${
-                isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
-              }`}
-            />
-            <span className="text-xs text-slate-300">
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-2.5 h-2.5 rounded-full ${
+                  isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                }`}
+              />
+              <span className="text-xs text-slate-300">
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                title="Settings"
+              >
+                <span>⚙️</span>
+                <span className="hidden sm:inline">Settings</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
