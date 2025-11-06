@@ -26,13 +26,13 @@ export class StatePersistence {
       password: options.password,
       lazyConnect: true,
       retryStrategy: (times: number) => {
-        // Stop retrying after 3 attempts
-        if (times > 3) {
-          console.warn('⚠️  Redis connection failed after 3 attempts, running without persistence');
+        // Stop retrying after 10 attempts (~30 seconds total)
+        if (times > 10) {
+          console.warn('⚠️  Redis connection failed after 10 attempts, running without persistence');
           return null;
         }
-        // Exponential backoff: 1s, 2s, 4s
-        return Math.min(times * 1000, 4000);
+        // Exponential backoff: 1s, 2s, 3s, 4s, 5s... max 5s
+        return Math.min(times * 1000, 5000);
       },
     });
 

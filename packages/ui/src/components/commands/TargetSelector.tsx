@@ -45,23 +45,15 @@ export function TargetSelector({ target, onChange, allowDevice = true }: TargetS
   const { nodes: simNodes } = useSimulatorStore();
   const { nodes: scadaNodes } = useSCADAStore();
 
+  // All hooks must be called before any conditional returns
+  const [showNewForm, setShowNewForm] = useState(target?.mode === 'new');
+
   // Initialize with defaults if target is null - only once on mount
   useEffect(() => {
     if (!target) {
       onChange(getDefaultTarget());
     }
   }, []);
-
-  // Show loading state while target is being initialized
-  if (!target) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-slate-400">Loading target selection...</div>
-      </div>
-    );
-  }
-
-  const [showNewForm, setShowNewForm] = useState(target.mode === 'new');
 
   // Combine simulator and SCADA nodes
   const allNodes = useMemo(() => {
@@ -102,8 +94,17 @@ export function TargetSelector({ target, onChange, allowDevice = true }: TargetS
   }, [simNodes, scadaNodes]);
 
   const selectedNode = useMemo(() => {
-    return allNodes.find((n) => n.id === target.nodeId);
-  }, [allNodes, target.nodeId]);
+    return allNodes.find((n) => n.id === target?.nodeId);
+  }, [allNodes, target?.nodeId]);
+
+  // Show loading state while target is being initialized
+  if (!target) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-slate-400">Loading target selection...</div>
+      </div>
+    );
+  }
 
   const handleModeChange = (mode: 'existing' | 'new') => {
     setShowNewForm(mode === 'new');

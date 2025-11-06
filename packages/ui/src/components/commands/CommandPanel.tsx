@@ -55,6 +55,7 @@ export function CommandPanel() {
         clean: connectionConfig.cleanSession,
         keepalive: connectionConfig.keepalive,
         reconnectPeriod: connectionConfig.reconnectPeriod,
+        protocolVersion: 4, // MQTT 3.1.1 (Aedes doesn't support v5 yet)
       };
 
       // TLS options

@@ -42,7 +42,7 @@ export const useMQTTStore = create<MQTTState>()(
         clean: true,
         reconnectPeriod: 5000,
         keepalive: 60,
-        protocolVersion: 5, // MQTT v5
+        protocolVersion: 4, // MQTT v3.1.1 (Aedes broker support)
       });
 
       client.on('connect', () => {
