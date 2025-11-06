@@ -21,6 +21,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { EoNNode } from './nodes/EoNNode';
+import { DeviceNode } from './nodes/DeviceNode';
 import type { SimulatorNode, SimulatorEdge, EoNNodeData } from '../../types/simulator.types';
 
 interface EnhancedReactFlowCanvasProps {
@@ -35,6 +36,7 @@ interface EnhancedReactFlowCanvasProps {
 
 const nodeTypes: NodeTypes = {
   eon: EoNNode,
+  device: DeviceNode,
 };
 
 function FlowCanvas({

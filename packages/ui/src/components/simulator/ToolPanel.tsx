@@ -3,7 +3,7 @@
  * Contains templates, tools, and node creation options for drag & drop
  */
 
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { NodeTemplate } from '../../types/simulator.types';
 
 interface ToolPanelProps {
@@ -15,6 +15,40 @@ interface ToolPanelProps {
 
 export function ToolPanel({ isOpen, onToggle, templates, onDragStart }: ToolPanelProps) {
   const [activeTab, setActiveTab] = useState<'nodes' | 'templates' | 'devices'>('nodes');
+  const [panelWidth, setPanelWidth] = useState(320); // Default 320px
+  const [isResizing, setIsResizing] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Handle resize
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isResizing) return;
+      const newWidth = Math.max(280, Math.min(600, e.clientX));
+      setPanelWidth(newWidth);
+    },
+    [isResizing]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  // Add/remove event listeners
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isResizing, handleMouseMove, handleMouseUp]);
 
   // Basic node types that can be dragged to canvas
   const nodeTypes = [
@@ -84,24 +118,29 @@ export function ToolPanel({ isOpen, onToggle, templates, onDragStart }: ToolPane
 
   return (
     <div className="relative flex">
-      {/* Panel - slides in/out */}
+      {/* Panel - slides in/out and resizable */}
       <div
+        ref={panelRef}
         className={`
-          w-80 bg-slate-900 border-r border-slate-700
+          bg-slate-900 border-r border-slate-700
           transition-all duration-300 ease-in-out
           flex flex-col
-          ${isOpen ? 'translate-x-0' : '-translate-x-80'}
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
-        style={{ marginLeft: isOpen ? 0 : -320 }}
+        style={{
+          width: isOpen ? panelWidth : 0,
+          minWidth: isOpen ? panelWidth : 0,
+          marginLeft: isOpen ? 0 : -panelWidth,
+        }}
       >
         {/* Header */}
-        <div className="p-4 border-b border-slate-700">
+        <div className="p-4 border-b border-slate-700 flex-shrink-0">
           <h2 className="text-lg font-bold text-white mb-1">Plant Designer</h2>
           <p className="text-xs text-slate-400">Drag & drop to canvas</p>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-slate-700">
+        {/* Tabs - Scrollable */}
+        <div className="flex border-b border-slate-700 overflow-x-auto flex-shrink-0 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
           {[
             { id: 'nodes' as const, label: 'Nodes', icon: '🔷' },
             { id: 'devices' as const, label: 'Devices', icon: '📟' },
@@ -111,7 +150,7 @@ export function ToolPanel({ isOpen, onToggle, templates, onDragStart }: ToolPane
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`
-                flex-1 px-4 py-3 text-sm font-medium transition-colors
+                flex-shrink-0 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap
                 ${
                   activeTab === tab.id
                     ? 'bg-slate-800 text-white border-b-2 border-emerald-500'
@@ -256,6 +295,22 @@ export function ToolPanel({ isOpen, onToggle, templates, onDragStart }: ToolPane
             🗑️ Clear Canvas
           </button>
         </div>
+
+        {/* Resize Handle - visible when panel is open */}
+        {isOpen && (
+          <div
+            onMouseDown={handleMouseDown}
+            className={`
+              absolute top-0 right-0 bottom-0 w-1 cursor-ew-resize
+              hover:bg-emerald-500 transition-colors z-20
+              ${isResizing ? 'bg-emerald-500' : 'bg-transparent'}
+            `}
+            title="Drag to resize"
+          >
+            {/* Visual indicator */}
+            <div className="absolute top-1/2 -translate-y-1/2 right-0 w-1 h-12 bg-slate-600 rounded-l" />
+          </div>
+        )}
       </div>
 
       {/* Toggle Button - positioned at the edge of the panel */}
@@ -263,6 +318,7 @@ export function ToolPanel({ isOpen, onToggle, templates, onDragStart }: ToolPane
         onClick={onToggle}
         className="absolute -right-8 top-1/2 -translate-y-1/2 bg-slate-800 hover:bg-slate-700 text-white px-2 py-4 rounded-r-lg border border-l-0 border-slate-600 transition-colors z-10"
         title={isOpen ? 'Close panel' : 'Open tools'}
+        style={{ left: isOpen ? panelWidth : 0 }}
       >
         {isOpen ? '◀' : '▶'}
       </button>

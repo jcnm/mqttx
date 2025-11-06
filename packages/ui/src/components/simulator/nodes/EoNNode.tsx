@@ -59,9 +59,14 @@ export const EoNNode = memo(({ data, selected }: EoNNodeProps) => {
         ${data.state === 'running' ? 'shadow-lg shadow-emerald-500/20' : ''}
       `}
     >
-      {/* Header */}
+      {/* Header with Icon */}
       <div className="px-4 py-3 border-b border-slate-700/50 bg-slate-900/80 rounded-t-lg">
-        <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-start gap-3">
+          {/* EoN Icon */}
+          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-xl">
+            🔷
+          </div>
+
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               {getStatusIcon()}
@@ -71,6 +76,9 @@ export const EoNNode = memo(({ data, selected }: EoNNodeProps) => {
             </div>
             <p className="text-xs text-slate-400 truncate">
               Group: {data.config.groupId}
+            </p>
+            <p className="text-[10px] text-emerald-400 font-medium mt-0.5">
+              Edge of Network Node
             </p>
           </div>
         </div>

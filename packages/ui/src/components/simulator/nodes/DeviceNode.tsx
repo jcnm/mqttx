@@ -59,13 +59,25 @@ export const DeviceNode = memo(({ data, selected }: DeviceNodeProps) => {
         ${data.state === 'running' ? 'shadow-lg shadow-blue-500/20' : ''}
       `}
     >
-      {/* Header */}
+      {/* Header with Icon */}
       <div className="px-4 py-3 border-b border-slate-700/50 bg-slate-900/80 rounded-t-lg">
-        <div className="flex items-center gap-2 mb-2">
-          {getStatusIcon()}
-          <h3 className="text-sm font-semibold text-white truncate flex-1">
-            {data.deviceId}
-          </h3>
+        <div className="flex items-start gap-3">
+          {/* Device Icon */}
+          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-xl">
+            📟
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              {getStatusIcon()}
+              <h3 className="text-sm font-semibold text-white truncate">
+                {data.deviceId}
+              </h3>
+            </div>
+            <p className="text-[10px] text-blue-400 font-medium">
+              Sparkplug B Device
+            </p>
+          </div>
         </div>
 
         {/* Badges */}

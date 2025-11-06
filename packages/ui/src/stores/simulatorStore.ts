@@ -62,74 +62,250 @@ export const useSimulatorStore = create<SimulatorState>()(
     flowNodes: [],
     flowEdges: [],
     templates: [
+      // Template 1: EoN with Complex Device (Industrial Pump Station)
       {
-        id: 'temp-sensor',
-        name: 'Temperature Sensor',
-        description: 'Basic temperature sensor with sine wave data',
-        type: 'device',
-        config: {
-          deviceId: 'temp-sensor-01',
-          protocol: 'SparkplugB' as const,
-          metrics: [
-            {
-              name: 'Temperature',
-              datatype: 9, // Float
-              value: 20.0,
-              properties: {
-                engineeringUnits: '°C',
-                min: -40,
-                max: 125,
+        id: 'pump-station',
+        name: 'Pump Station',
+        description: 'Complete pump station with complex monitoring and control',
+        type: 'plant' as const,
+        category: 'Water Treatment',
+        config: [
+          {
+            config: {
+              groupId: 'WaterTreatment',
+              edgeNodeId: 'PumpStation_01',
+              protocol: 'SparkplugB' as const,
+              sparkplugConfig: {
+                bdSeqStrategy: 'sequential' as const,
+                rebirthTimeout: 60,
               },
-              logic: {
-                type: 'sine' as const,
-                params: {
-                  min: 15,
-                  max: 35,
-                  frequency: 0.1,
-                  amplitude: 10,
+              lifecycle: {
+                autoReconnect: true,
+                reconnectDelay: 5000,
+              },
+              network: {
+                qos: 1 as 0 | 1 | 2,
+                cleanSession: true,
+              },
+              persistence: {
+                enabled: true,
+              },
+            },
+            devices: [
+              {
+                id: 'pump-01',
+                deviceId: 'CentrifugalPump_01',
+                protocol: 'SparkplugB' as const,
+                metrics: [
+                  {
+                    name: 'Running',
+                    datatype: 11,
+                    value: false,
+                    properties: { description: 'Pump running status' },
+                  },
+                  {
+                    name: 'FlowRate',
+                    datatype: 9,
+                    value: 0,
+                    properties: {
+                      engineeringUnits: 'm³/h',
+                      min: 0,
+                      max: 500,
+                      description: 'Current flow rate',
+                    },
+                    logic: {
+                      type: 'sine' as const,
+                      params: { min: 100, max: 450, frequency: 0.05 },
+                    },
+                  },
+                  {
+                    name: 'Pressure',
+                    datatype: 9,
+                    value: 0,
+                    properties: {
+                      engineeringUnits: 'bar',
+                      min: 0,
+                      max: 10,
+                      description: 'Discharge pressure',
+                    },
+                    logic: {
+                      type: 'sine' as const,
+                      params: { min: 4.5, max: 6.5, frequency: 0.08 },
+                    },
+                  },
+                  {
+                    name: 'Power',
+                    datatype: 9,
+                    value: 0,
+                    properties: {
+                      engineeringUnits: 'kW',
+                      min: 0,
+                      max: 150,
+                      description: 'Motor power consumption',
+                    },
+                    logic: {
+                      type: 'random' as const,
+                      params: { min: 85, max: 135 },
+                    },
+                  },
+                  {
+                    name: 'Temperature',
+                    datatype: 9,
+                    value: 25.0,
+                    properties: {
+                      engineeringUnits: '°C',
+                      min: 0,
+                      max: 100,
+                      description: 'Motor winding temperature',
+                    },
+                    logic: {
+                      type: 'sine' as const,
+                      params: { min: 45, max: 75, frequency: 0.02 },
+                    },
+                  },
+                  {
+                    name: 'Vibration',
+                    datatype: 9,
+                    value: 0,
+                    properties: {
+                      engineeringUnits: 'mm/s',
+                      min: 0,
+                      max: 20,
+                      description: 'Vibration level (RMS)',
+                    },
+                    logic: {
+                      type: 'random' as const,
+                      params: { min: 1.2, max: 3.5 },
+                    },
+                  },
+                  {
+                    name: 'RunHours',
+                    datatype: 12, // UInt32
+                    value: 15420,
+                    properties: {
+                      engineeringUnits: 'hours',
+                      description: 'Total runtime hours',
+                    },
+                  },
+                  {
+                    name: 'Alarm',
+                    datatype: 11,
+                    value: false,
+                    properties: { description: 'Active alarm condition' },
+                  },
+                ],
+                dataProduction: {
+                  frequency: 500, // Fast updates for industrial control
+                  logic: { type: 'sine' as const, params: {} },
+                  enabled: true,
                 },
+                state: 'stopped' as const,
               },
-            },
-          ],
-          dataProduction: {
-            frequency: 1000,
-            logic: { type: 'sine' as const, params: {} },
-            enabled: true,
+            ],
+            state: 'stopped' as const,
+            metrics: [],
           },
-          state: 'stopped' as const,
-        },
+        ],
       },
+      // Template 2: EoN with 2 Simple Devices (Environmental Monitoring)
       {
-        id: 'pressure-sensor',
-        name: 'Pressure Sensor',
-        description: 'Pressure sensor with random data',
-        type: 'device',
-        config: {
-          deviceId: 'pressure-sensor-01',
-          protocol: 'SparkplugB' as const,
-          metrics: [
-            {
-              name: 'Pressure',
-              datatype: 9,
-              value: 101.325,
-              properties: {
-                engineeringUnits: 'kPa',
-                min: 0,
-                max: 200,
+        id: 'env-monitoring',
+        name: 'Environmental Monitor',
+        description: 'Basic environmental monitoring with temperature and humidity sensors',
+        type: 'plant' as const,
+        category: 'Building Automation',
+        config: [
+          {
+            config: {
+              groupId: 'Building',
+              edgeNodeId: 'EnvMonitor_01',
+              protocol: 'SparkplugB' as const,
+              sparkplugConfig: {
+                bdSeqStrategy: 'sequential' as const,
+                rebirthTimeout: 60,
               },
-              logic: {
-                type: 'random' as const,
-                params: { min: 95, max: 110 },
+              lifecycle: {
+                autoReconnect: true,
+                reconnectDelay: 5000,
+              },
+              network: {
+                qos: 1 as 0 | 1 | 2,
+                cleanSession: true,
+              },
+              persistence: {
+                enabled: false,
               },
             },
-          ],
-          dataProduction: {
-            frequency: 2000,
-            logic: { type: 'random' as const, params: {} },
-            enabled: true,
+            devices: [
+              {
+                id: 'temp-sensor',
+                deviceId: 'TempSensor_01',
+                protocol: 'SparkplugB' as const,
+                metrics: [
+                  {
+                    name: 'Temperature',
+                    datatype: 9,
+                    value: 22.0,
+                    properties: {
+                      engineeringUnits: '°C',
+                      min: -40,
+                      max: 85,
+                    },
+                    logic: {
+                      type: 'sine' as const,
+                      params: { min: 18, max: 26, frequency: 0.1 },
+                    },
+                  },
+                  {
+                    name: 'Online',
+                    datatype: 11,
+                    value: true,
+                  },
+                ],
+                dataProduction: {
+                  frequency: 2000,
+                  logic: { type: 'sine' as const, params: {} },
+                  enabled: true,
+                },
+                state: 'stopped' as const,
+              },
+              {
+                id: 'humidity-sensor',
+                deviceId: 'HumiditySensor_01',
+                protocol: 'SparkplugB' as const,
+                metrics: [
+                  {
+                    name: 'Humidity',
+                    datatype: 9,
+                    value: 45.0,
+                    properties: {
+                      engineeringUnits: '%RH',
+                      min: 0,
+                      max: 100,
+                    },
+                    logic: {
+                      type: 'random' as const,
+                      params: { min: 35, max: 65 },
+                    },
+                  },
+                  {
+                    name: 'Online',
+                    datatype: 11,
+                    value: true,
+                  },
+                ],
+                dataProduction: {
+                  frequency: 2000,
+                  logic: { type: 'random' as const, params: {} },
+                  enabled: true,
+                },
+                state: 'stopped' as const,
+              },
+            ],
+            state: 'stopped' as const,
+            metrics: [],
           },
-          state: 'stopped' as const,
-        },
+        ],
       },
     ],
     selectedNode: null,
