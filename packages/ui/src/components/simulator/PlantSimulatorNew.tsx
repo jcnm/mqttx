@@ -17,6 +17,7 @@ import type {
   SimulatedDevice,
   EoNNodeData,
   SimulatorNode,
+  MetricDefinition,
 } from '../../types/simulator.types';
 import {
   useNodesState,
