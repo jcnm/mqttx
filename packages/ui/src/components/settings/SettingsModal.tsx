@@ -16,7 +16,7 @@ type TabType = 'broker' | 'simulator';
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>('broker');
-  const { brokerConfig, simulatorDefaults, updateBrokerConfig, updateSimulatorDefaults, getBrokerUrl } = useSettingsStore();
+  const { brokerConfig, simulatorDefaults, updateBrokerConfig, updateSimulatorDefaults } = useSettingsStore();
   const { connect, disconnect, isConnected } = useMQTTStore();
 
   const [localBrokerConfig, setLocalBrokerConfig] = useState(brokerConfig);
