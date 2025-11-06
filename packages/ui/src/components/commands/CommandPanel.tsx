@@ -139,7 +139,7 @@ export function CommandPanel() {
 
     try {
       let topic: string;
-      let payload: Buffer;
+      let payload: Uint8Array;
 
       if (target.protocol === 'SparkplugB') {
         // Sparkplug B Protocol
@@ -180,8 +180,8 @@ export function CommandPanel() {
           ];
         }
 
-        // Encode with @sparkplug/codec
-        payload = Buffer.from(encodePayload(sparkplugPayload));
+        // Encode with @sparkplug/codec - already returns Uint8Array
+        payload = encodePayload(sparkplugPayload);
       } else {
         // Raw MQTT v5
         topic = `${target.namespace || 'custom'}/${target.groupId}/${target.edgeNodeId}`;
@@ -199,14 +199,17 @@ export function CommandPanel() {
             datatype: m.datatype,
           })),
         };
-        payload = Buffer.from(JSON.stringify(rawPayload));
+        // Convert JSON string to Uint8Array for browser compatibility
+        const encoder = new TextEncoder();
+        payload = encoder.encode(JSON.stringify(rawPayload));
       }
 
       // Publish message
       await new Promise<void>((resolve, reject) => {
+        // MQTT.js accepts Uint8Array at runtime, cast for TypeScript
         mqttClient.publish(
           topic,
-          payload,
+          payload as any,
           {
             qos: connectionConfig.qos,
             retain: false,

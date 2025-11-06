@@ -1,11 +1,12 @@
 /**
  * Settings Modal Component
- * Configure broker connection and simulator defaults
+ * Configure broker connection and simulator defaults with test connection and reset features
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useMQTTStore } from '../../stores/mqttStore';
+import mqtt from 'mqtt';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -14,16 +15,127 @@ interface SettingsModalProps {
 
 type TabType = 'broker' | 'simulator';
 
+type ConnectionTestStatus = 'idle' | 'testing' | 'success' | 'error';
+
+interface ConnectionTestResult {
+  status: ConnectionTestStatus;
+  message: string;
+  details?: string;
+  timestamp?: number;
+}
+
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>('broker');
-  const { brokerConfig, simulatorDefaults, updateBrokerConfig, updateSimulatorDefaults } = useSettingsStore();
+  const { brokerConfig, simulatorDefaults, updateBrokerConfig, updateSimulatorDefaults, resetBrokerConfig, resetSimulatorDefaults } = useSettingsStore();
   const { connect, disconnect, isConnected } = useMQTTStore();
 
   const [localBrokerConfig, setLocalBrokerConfig] = useState(brokerConfig);
   const [localSimulatorDefaults, setLocalSimulatorDefaults] = useState(simulatorDefaults);
   const [showPassword, setShowPassword] = useState(false);
+  const [connectionTest, setConnectionTest] = useState<ConnectionTestResult>({ status: 'idle', message: '' });
+
+  // Update local state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setLocalBrokerConfig(brokerConfig);
+      setLocalSimulatorDefaults(simulatorDefaults);
+      setConnectionTest({ status: 'idle', message: '' });
+    }
+  }, [isOpen, brokerConfig, simulatorDefaults]);
 
   if (!isOpen) return null;
+
+  const handleTestConnection = async () => {
+    setConnectionTest({ status: 'testing', message: 'Testing connection...' });
+
+    const testUrl = `${localBrokerConfig.protocol}://${localBrokerConfig.url}:${localBrokerConfig.port}`;
+
+    try {
+      // Create a test client with timeout
+      const testClient = mqtt.connect(testUrl, {
+        clientId: `test-${Math.random().toString(16).slice(2, 8)}`,
+        clean: true,
+        keepalive: 10,
+        connectTimeout: 5000,
+        reconnectPeriod: 0, // Disable auto-reconnect for test
+        username: localBrokerConfig.username,
+        password: localBrokerConfig.password,
+      });
+
+      let timeoutId: NodeJS.Timeout;
+      let resolved = false;
+
+      const cleanup = () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          testClient.end(true);
+        }
+      };
+
+      // Set timeout
+      timeoutId = setTimeout(() => {
+        if (!resolved) {
+          cleanup();
+          setConnectionTest({
+            status: 'error',
+            message: 'Connection timeout',
+            details: `Failed to connect to ${testUrl} within 5 seconds. Check if the broker is running and accessible.`,
+            timestamp: Date.now(),
+          });
+        }
+      }, 5000);
+
+      // Handle connection success
+      testClient.on('connect', () => {
+        if (!resolved) {
+          cleanup();
+          setConnectionTest({
+            status: 'success',
+            message: 'Connection successful!',
+            details: `Successfully connected to ${testUrl}. MQTT broker is reachable and accepting connections.`,
+            timestamp: Date.now(),
+          });
+        }
+      });
+
+      // Handle connection error
+      testClient.on('error', (error) => {
+        if (!resolved) {
+          cleanup();
+          let errorMessage = error.message || 'Unknown error';
+          let details = '';
+
+          // Provide more helpful error messages
+          if (errorMessage.includes('ECONNREFUSED')) {
+            details = `Connection refused. The broker at ${testUrl} is not accepting connections. Make sure the broker is running.`;
+          } else if (errorMessage.includes('ENOTFOUND')) {
+            details = `Host not found. Could not resolve hostname "${localBrokerConfig.url}". Check the broker URL.`;
+          } else if (errorMessage.includes('ETIMEDOUT')) {
+            details = `Connection timeout. The broker at ${testUrl} is not responding. Check network connectivity.`;
+          } else if (errorMessage.includes('Not authorized') || errorMessage.includes('Bad username')) {
+            details = `Authentication failed. Check your username and password.`;
+          } else {
+            details = `Error: ${errorMessage}`;
+          }
+
+          setConnectionTest({
+            status: 'error',
+            message: 'Connection failed',
+            details,
+            timestamp: Date.now(),
+          });
+        }
+      });
+    } catch (error: any) {
+      setConnectionTest({
+        status: 'error',
+        message: 'Connection failed',
+        details: error.message || 'Unknown error occurred',
+        timestamp: Date.now(),
+      });
+    }
+  };
 
   const handleSave = () => {
     // Update broker config
@@ -46,7 +158,26 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     // Reset to stored values
     setLocalBrokerConfig(brokerConfig);
     setLocalSimulatorDefaults(simulatorDefaults);
+    setConnectionTest({ status: 'idle', message: '' });
     onClose();
+  };
+
+  const handleResetBroker = () => {
+    if (confirm('Reset broker settings to default values? This will reset URL, port, and all connection parameters.')) {
+      resetBrokerConfig();
+      // Reload from store
+      const defaultConfig = useSettingsStore.getState().brokerConfig;
+      setLocalBrokerConfig(defaultConfig);
+      setConnectionTest({ status: 'idle', message: '' });
+    }
+  };
+
+  const handleResetSimulator = () => {
+    if (confirm('Reset simulator settings to default values?')) {
+      resetSimulatorDefaults();
+      const defaultDefaults = useSettingsStore.getState().simulatorDefaults;
+      setLocalSimulatorDefaults(defaultDefaults);
+    }
   };
 
   const currentBrokerUrl = `${localBrokerConfig.protocol}://${localBrokerConfig.url}:${localBrokerConfig.port}`;
@@ -93,15 +224,60 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {/* Broker Tab */}
           {activeTab === 'broker' && (
             <div className="space-y-4">
-              <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-4 mb-4">
+              {/* Connection URL Preview */}
+              <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <span className="text-2xl">ℹ️</span>
-                  <div>
+                  <div className="flex-1">
                     <h4 className="font-semibold text-blue-400 mb-1">Connection URL Preview</h4>
-                    <p className="text-sm text-slate-300 font-mono">{currentBrokerUrl}</p>
+                    <p className="text-sm text-slate-300 font-mono break-all">{currentBrokerUrl}</p>
                   </div>
                 </div>
               </div>
+
+              {/* Connection Test Result */}
+              {connectionTest.status !== 'idle' && (
+                <div
+                  className={`border rounded-lg p-4 ${
+                    connectionTest.status === 'testing'
+                      ? 'bg-yellow-900/20 border-yellow-800/30'
+                      : connectionTest.status === 'success'
+                        ? 'bg-green-900/20 border-green-800/30'
+                        : 'bg-red-900/20 border-red-800/30'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">
+                      {connectionTest.status === 'testing'
+                        ? '⏳'
+                        : connectionTest.status === 'success'
+                          ? '✅'
+                          : '❌'}
+                    </span>
+                    <div className="flex-1">
+                      <h4
+                        className={`font-semibold mb-1 ${
+                          connectionTest.status === 'testing'
+                            ? 'text-yellow-400'
+                            : connectionTest.status === 'success'
+                              ? 'text-green-400'
+                              : 'text-red-400'
+                        }`}
+                      >
+                        {connectionTest.message}
+                      </h4>
+                      {connectionTest.details && (
+                        <p className="text-sm text-slate-300">{connectionTest.details}</p>
+                      )}
+                      {connectionTest.timestamp && (
+                        <p className="text-xs text-slate-500 mt-2">
+                          Tested at {new Date(connectionTest.timestamp).toLocaleTimeString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -156,6 +332,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   placeholder="localhost or broker.example.com"
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white"
                 />
+                <p className="text-xs text-slate-400 mt-1">
+                  Platform broker: localhost (default)
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -264,13 +443,30 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   Clean Session (Start fresh on each connection)
                 </label>
               </div>
+
+              {/* Test Connection and Reset Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-slate-700">
+                <button
+                  onClick={handleTestConnection}
+                  disabled={connectionTest.status === 'testing'}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
+                >
+                  {connectionTest.status === 'testing' ? '⏳ Testing...' : '🔍 Test Connection'}
+                </button>
+                <button
+                  onClick={handleResetBroker}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  🔄 Reset to Default
+                </button>
+              </div>
             </div>
           )}
 
           {/* Simulator Defaults Tab */}
           {activeTab === 'simulator' && (
             <div className="space-y-4">
-              <div className="bg-emerald-900/20 border border-emerald-800/30 rounded-lg p-4 mb-4">
+              <div className="bg-emerald-900/20 border border-emerald-800/30 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <span className="text-2xl">ℹ️</span>
                   <div>
@@ -430,6 +626,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   />
                 </div>
               )}
+
+              {/* Reset Button */}
+              <div className="pt-4 border-t border-slate-700">
+                <button
+                  onClick={handleResetSimulator}
+                  className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  🔄 Reset to Default
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -446,7 +652,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             onClick={handleSave}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
           >
-            Save & Apply
+            💾 Save & Apply
           </button>
         </div>
       </div>
