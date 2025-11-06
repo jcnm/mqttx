@@ -58,12 +58,18 @@ function FlowCanvas({
   // Handle drop on canvas
   const handleDrop = useCallback(
     (event: ReactDragEvent<HTMLDivElement>) => {
+      console.log('🎯 Canvas drop event fired');
       event.preventDefault();
 
       const type = event.dataTransfer.getData('application/reactflow-type');
       const data = event.dataTransfer.getData('application/reactflow-data');
 
-      if (!type) return;
+      console.log('🎯 Drop data from transfer:', { type, data });
+
+      if (!type) {
+        console.warn('⚠️ No type in drop data');
+        return;
+      }
 
       const position = screenToFlowPosition({
         x: event.clientX,
@@ -71,6 +77,7 @@ function FlowCanvas({
       });
 
       const dropData = data ? JSON.parse(data) : {};
+      console.log('🎯 Calling onCanvasDrop with:', position, { type, ...dropData });
       onCanvasDrop(position, { type, ...dropData });
     },
     [screenToFlowPosition, onCanvasDrop]

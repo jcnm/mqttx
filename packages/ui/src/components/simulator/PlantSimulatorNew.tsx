@@ -99,6 +99,7 @@ export function PlantSimulatorNew() {
 
   // Handle drag start from tool panel
   const handleDragStart = useCallback((event: React.DragEvent, type: string, data?: any) => {
+    console.log('🎯 Drag started:', type, data);
     event.dataTransfer.effectAllowed = 'copy';
     event.dataTransfer.setData('application/reactflow-type', type);
     if (data) {
@@ -109,6 +110,7 @@ export function PlantSimulatorNew() {
   // Handle drop on canvas
   const handleCanvasDrop = useCallback(
     (position: { x: number; y: number }, data: any) => {
+      console.log('🎯 Drop received:', position, data);
       const { type } = data;
 
       if (type === 'create-node') {
@@ -266,15 +268,7 @@ export function PlantSimulatorNew() {
   const selectedNode = selectedNodeId ? storeNodes.get(selectedNodeId) : null;
 
   return (
-    <div className="h-full bg-slate-950 flex flex-col relative">
-      {/* Tool Panel - Left Side */}
-      <ToolPanel
-        isOpen={toolPanelOpen}
-        onToggle={() => setToolPanelOpen(!toolPanelOpen)}
-        templates={templates}
-        onDragStart={handleDragStart}
-      />
-
+    <div className="h-full bg-slate-950 flex flex-col">
       {/* Simulator Controls - Top Bar */}
       <SimulatorControls
         onAddNode={handleAddNode}
@@ -283,8 +277,16 @@ export function PlantSimulatorNew() {
         onImportConfig={handleImportConfig}
       />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Content Area - Below Controls */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Tool Panel - Left Side (inside main content) */}
+        <ToolPanel
+          isOpen={toolPanelOpen}
+          onToggle={() => setToolPanelOpen(!toolPanelOpen)}
+          templates={templates}
+          onDragStart={handleDragStart}
+        />
+
         {/* ReactFlow Canvas */}
         <div className="flex-1 relative">
           {!isConnected && (
@@ -293,9 +295,21 @@ export function PlantSimulatorNew() {
             </div>
           )}
 
-          {storeNodes.size === 0 ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
-              <div className="text-center max-w-lg">
+          {/* Always render canvas for drag & drop support */}
+          <EnhancedReactFlowCanvas
+            nodes={reactFlowNodes as SimulatorNode[]}
+            edges={reactFlowEdges}
+            onNodesChange={onNodesChange as any}
+            onEdgesChange={onEdgesChange as any}
+            onConnect={handleConnect}
+            onNodeClick={handleNodeClick}
+            onCanvasDrop={handleCanvasDrop}
+          />
+
+          {/* Empty state overlay - allows drops to pass through */}
+          {storeNodes.size === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="text-center max-w-lg pointer-events-auto bg-slate-900/95 backdrop-blur rounded-xl p-8 border border-slate-700 shadow-2xl">
                 <div className="text-6xl mb-4">🏭</div>
                 <h3 className="text-2xl font-bold text-white mb-2">
                   Design Your Industrial Plant
@@ -320,16 +334,6 @@ export function PlantSimulatorNew() {
                 </div>
               </div>
             </div>
-          ) : (
-            <EnhancedReactFlowCanvas
-              nodes={reactFlowNodes as SimulatorNode[]}
-              edges={reactFlowEdges}
-              onNodesChange={onNodesChange as any}
-              onEdgesChange={onEdgesChange as any}
-              onConnect={handleConnect}
-              onNodeClick={handleNodeClick}
-              onCanvasDrop={handleCanvasDrop}
-            />
           )}
         </div>
 

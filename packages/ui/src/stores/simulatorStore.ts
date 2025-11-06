@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { enableMapSet } from 'immer';
 import type {
   SimulatedEoN,
   SimulatorNode,
@@ -12,6 +13,9 @@ import type {
   NodeTemplate,
   SimulatorStats,
 } from '../types/simulator.types';
+
+// Enable Immer support for Map and Set
+enableMapSet();
 
 interface SimulatorState {
   // Data

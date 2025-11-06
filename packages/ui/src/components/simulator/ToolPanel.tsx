@@ -10,7 +10,7 @@ interface ToolPanelProps {
   isOpen: boolean;
   onToggle: () => void;
   templates: NodeTemplate[];
-  onDragStart: (event: React.DragEvent, type: string, data?: any) => void;
+  onDragStart: (event: React.DragEvent<HTMLDivElement>, type: string, data?: any) => void;
 }
 
 export function ToolPanel({ isOpen, onToggle, templates, onDragStart }: ToolPanelProps) {
@@ -83,31 +83,16 @@ export function ToolPanel({ isOpen, onToggle, templates, onDragStart }: ToolPane
   ];
 
   return (
-    <>
-      {/* Toggle Button */}
-      <button
-        onClick={onToggle}
-        className={`
-          fixed left-0 top-1/2 -translate-y-1/2 z-50
-          bg-slate-800 hover:bg-slate-700 text-white
-          px-2 py-4 rounded-r-lg border border-l-0 border-slate-600
-          transition-all duration-300
-          ${isOpen ? 'translate-x-80' : 'translate-x-0'}
-        `}
-        title={isOpen ? 'Close panel' : 'Open tools'}
-      >
-        {isOpen ? '◀' : '▶'}
-      </button>
-
-      {/* Panel */}
+    <div className="relative flex">
+      {/* Panel - slides in/out */}
       <div
         className={`
-          fixed left-0 top-0 bottom-0 w-80 z-40
-          bg-slate-900 border-r border-slate-700
-          transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+          w-80 bg-slate-900 border-r border-slate-700
+          transition-all duration-300 ease-in-out
           flex flex-col
+          ${isOpen ? 'translate-x-0' : '-translate-x-80'}
         `}
+        style={{ marginLeft: isOpen ? 0 : -320 }}
       >
         {/* Header */}
         <div className="p-4 border-b border-slate-700">
@@ -272,6 +257,15 @@ export function ToolPanel({ isOpen, onToggle, templates, onDragStart }: ToolPane
           </button>
         </div>
       </div>
-    </>
+
+      {/* Toggle Button - positioned at the edge of the panel */}
+      <button
+        onClick={onToggle}
+        className="absolute -right-8 top-1/2 -translate-y-1/2 bg-slate-800 hover:bg-slate-700 text-white px-2 py-4 rounded-r-lg border border-l-0 border-slate-600 transition-colors z-10"
+        title={isOpen ? 'Close panel' : 'Open tools'}
+      >
+        {isOpen ? '◀' : '▶'}
+      </button>
+    </div>
   );
 }
