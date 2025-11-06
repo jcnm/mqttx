@@ -58,6 +58,37 @@ export async function createServer(options: ServerOptions) {
     return options.broker.getStats();
   });
 
+  // Get all sessions
+  fastify.get('/api/broker/sessions', async () => {
+    return options.broker.getMonitor().getSessions();
+  });
+
+  // Get specific session
+  fastify.get<{
+    Params: { clientId: string };
+  }>('/api/broker/sessions/:clientId', async (request) => {
+    const { clientId } = request.params;
+    const session = options.broker.getMonitor().getSession(clientId);
+    if (!session) {
+      return { error: 'Session not found' };
+    }
+    return session;
+  });
+
+  // Get broker logs
+  fastify.get<{
+    Querystring: { limit?: string };
+  }>('/api/broker/logs', async (request) => {
+    const limit = request.query.limit ? parseInt(request.query.limit) : undefined;
+    return options.broker.getMonitor().getLogs(limit);
+  });
+
+  // Clear broker logs
+  fastify.delete('/api/broker/logs', async () => {
+    options.broker.getMonitor().clearLogs();
+    return { success: true };
+  });
+
   // Get all nodes
   fastify.get('/api/nodes', async () => {
     return options.stateManager.getAllNodes();
@@ -140,20 +171,64 @@ export async function createServer(options: ServerOptions) {
   // WebSocket for real-time updates
   fastify.get('/ws', { websocket: true }, (connection: any, req) => {
     const ws = connection.socket;
+    const monitor = options.broker.getMonitor();
+
+    // Send initial data
+    ws.send(JSON.stringify({
+      type: 'initial',
+      data: {
+        stats: monitor.getStats(),
+        sessions: monitor.getSessions(),
+        logs: monitor.getLogs(100),
+      },
+    }));
+
+    // Listen for new logs
+    const logHandler = (log: any) => {
+      ws.send(JSON.stringify({ type: 'log', data: log }));
+    };
+
+    // Listen for client events
+    const clientConnectHandler = (session: any) => {
+      ws.send(JSON.stringify({ type: 'clientConnect', data: session }));
+    };
+
+    const clientDisconnectHandler = (session: any) => {
+      ws.send(JSON.stringify({ type: 'clientDisconnect', data: session }));
+    };
+
+    const sessionStaleHandler = (session: any) => {
+      ws.send(JSON.stringify({ type: 'sessionStale', data: session }));
+    };
+
+    monitor.on('log', logHandler);
+    monitor.on('clientConnect', clientConnectHandler);
+    monitor.on('clientDisconnect', clientDisconnectHandler);
+    monitor.on('sessionStale', sessionStaleHandler);
 
     ws.on('message', (message: any) => {
-      // Handle WebSocket messages
-      ws.send(JSON.stringify({ echo: message.toString() }));
+      try {
+        const data = JSON.parse(message.toString());
+        if (data.type === 'ping') {
+          ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+        }
+      } catch (error) {
+        // Ignore invalid messages
+      }
     });
 
-    // Send periodic updates
+    // Send periodic stats updates
     const interval = setInterval(() => {
-      const stats = options.broker.getStats();
+      const stats = monitor.getStats();
       ws.send(JSON.stringify({ type: 'stats', data: stats }));
     }, 5000);
 
     ws.on('close', () => {
       clearInterval(interval);
+      monitor.off('log', logHandler);
+      monitor.off('clientConnect', clientConnectHandler);
+      monitor.off('clientDisconnect', clientDisconnectHandler);
+      monitor.off('sessionStale', sessionStaleHandler);
     });
   });
 

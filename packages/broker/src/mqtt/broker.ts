@@ -10,6 +10,7 @@ import type { ConfigLoader } from '../config/loader.js';
 import type { StateManager } from '@sparkplug/state';
 import { MessageType, parseTopic } from '@sparkplug/namespace';
 import { decodePayload, getBdSeq } from '@sparkplug/codec';
+import { BrokerMonitor } from './broker-monitor.js';
 
 export interface BrokerOptions {
   config: ConfigLoader;
@@ -22,6 +23,7 @@ export class SparkplugBroker {
   private stateManager: StateManager;
   private tcpServer: ReturnType<typeof createServer> | null = null;
   private wsServer: ReturnType<typeof createHttpServer> | null = null;
+  private monitor: BrokerMonitor;
 
   constructor(options: BrokerOptions) {
     this.config = options.config;
@@ -32,6 +34,9 @@ export class SparkplugBroker {
       id: 'sparkplug-broker',
       persistence: undefined, // Will add Redis persistence later
     });
+
+    // Initialize broker monitor for detailed tracking
+    this.monitor = new BrokerMonitor(this.aedes, this.stateManager);
 
     this.setupHandlers();
   }
@@ -232,6 +237,9 @@ export class SparkplugBroker {
   }
 
   async stop(): Promise<void> {
+    // Stop monitor
+    this.monitor.stop();
+
     if (this.tcpServer) {
       await new Promise<void>((resolve) => {
         this.tcpServer!.close(() => resolve());
@@ -255,7 +263,11 @@ export class SparkplugBroker {
     return this.aedes;
   }
 
+  getMonitor(): BrokerMonitor {
+    return this.monitor;
+  }
+
   getStats() {
-    return this.stateManager.getStatistics();
+    return this.monitor.getStats();
   }
 }

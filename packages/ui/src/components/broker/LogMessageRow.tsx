@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import type { BrokerLog } from '../../types/broker.types';
+import { MessageInspector } from './MessageInspector';
 
 interface LogMessageRowProps {
   log: BrokerLog;
@@ -14,6 +15,7 @@ interface LogMessageRowProps {
 export function LogMessageRow({ log }: LogMessageRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [showInspector, setShowInspector] = useState(false);
 
   const handleCopy = async () => {
     const text = log.decoded
@@ -62,12 +64,17 @@ export function LogMessageRow({ log }: LogMessageRowProps) {
   };
 
   return (
-    <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden">
-      {/* Row Header */}
-      <div
-        className="p-4 cursor-pointer hover:bg-slate-800/50 transition-colors"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
+    <>
+      {showInspector && (
+        <MessageInspector log={log} onClose={() => setShowInspector(false)} />
+      )}
+
+      <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden">
+        {/* Row Header */}
+        <div
+          className="p-4 cursor-pointer hover:bg-slate-800/50 transition-colors"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
         <div className="flex items-start justify-between gap-4">
           {/* Left: Main Info */}
           <div className="flex-1 space-y-2">
@@ -171,12 +178,23 @@ export function LogMessageRow({ log }: LogMessageRowProps) {
                       </span>
                     )}
                   </div>
-                  <button
-                    onClick={handleCopy}
-                    className="flex items-center gap-1.5 px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
-                  >
-                    {copySuccess ? '✓ Copied' : '📋 Copy'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowInspector(true);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                    >
+                      🔍 Deep Inspect
+                    </button>
+                    <button
+                      onClick={handleCopy}
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                    >
+                      {copySuccess ? '✓ Copied' : '📋 Copy'}
+                    </button>
+                  </div>
                 </div>
 
                 <pre className="text-xs text-slate-300 bg-slate-900 rounded-lg p-4 overflow-x-auto font-mono max-h-96 overflow-y-auto border border-slate-800">
@@ -189,6 +207,7 @@ export function LogMessageRow({ log }: LogMessageRowProps) {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

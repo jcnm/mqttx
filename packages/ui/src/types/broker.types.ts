@@ -16,6 +16,67 @@ export type MessageType =
   | 'DCMD'
   | 'STATE';
 
+/**
+ * MQTT Fixed Header - First byte of every MQTT packet
+ */
+export interface MQTTFixedHeader {
+  messageType: number; // Bits 4-7
+  messageTypeName: string; // CONNECT, PUBLISH, SUBSCRIBE, etc.
+  dup: boolean; // Bit 3 - Duplicate delivery flag
+  qos: 0 | 1 | 2; // Bits 1-2 - Quality of Service
+  retain: boolean; // Bit 0 - Retain flag
+  remainingLength: number; // Variable byte integer
+}
+
+/**
+ * MQTT Variable Header - Depends on packet type
+ */
+export interface MQTTVariableHeader {
+  // For PUBLISH packets
+  topicName?: string;
+  packetIdentifier?: number;
+
+  // For MQTT 5.0 properties
+  properties?: {
+    payloadFormatIndicator?: number;
+    messageExpiryInterval?: number;
+    topicAlias?: number;
+    responseTopic?: string;
+    correlationData?: Uint8Array;
+    userProperty?: Array<{ key: string; value: string }>;
+    subscriptionIdentifier?: number;
+    contentType?: string;
+  };
+
+  // For CONNECT packets
+  protocolName?: string;
+  protocolLevel?: number;
+  connectFlags?: {
+    cleanSession?: boolean;
+    willFlag?: boolean;
+    willQoS?: number;
+    willRetain?: boolean;
+    passwordFlag?: boolean;
+    usernameFlag?: boolean;
+  };
+  keepAlive?: number;
+
+  // For CONNACK packets
+  sessionPresent?: boolean;
+  returnCode?: number;
+}
+
+/**
+ * Complete MQTT Packet Structure
+ */
+export interface MQTTPacketDetails {
+  fixedHeader: MQTTFixedHeader;
+  variableHeader: MQTTVariableHeader;
+  payloadLength: number;
+  totalPacketSize: number;
+  raw: Uint8Array; // Complete raw packet bytes
+}
+
 export interface BrokerLog {
   id: string;
   timestamp: number;
@@ -30,6 +91,27 @@ export interface BrokerLog {
   origin: {
     ip: string;
     port: number;
+  };
+
+  // Enhanced MQTT packet details
+  mqttPacket?: MQTTPacketDetails;
+
+  // Sparkplug B specific tracking
+  sparkplugMetadata?: {
+    groupId?: string;
+    edgeNodeId?: string;
+    deviceId?: string;
+    bdSeq?: bigint;
+    seq?: bigint;
+    metricCount?: number;
+    isStale?: boolean;
+  };
+
+  // Session tracking
+  sessionInfo?: {
+    isNewSession: boolean;
+    sessionExpiry?: number;
+    lastWillTopic?: string;
   };
 }
 
@@ -46,6 +128,28 @@ export interface Session {
     bytesOut: number;
     messagesIn: number;
     messagesOut: number;
+  };
+
+  // Enhanced session tracking
+  lastActivity: number;
+  keepAlive: number;
+  protocolVersion: number; // 3, 4, or 5 (MQTT 3.1, 3.1.1, or 5.0)
+  isStale: boolean; // True if last activity > keepAlive * 1.5
+  willMessage?: {
+    topic: string;
+    payload: Uint8Array;
+    qos: 0 | 1 | 2;
+    retain: boolean;
+  };
+
+  // Sparkplug B session tracking
+  sparkplugState?: {
+    groupId?: string;
+    edgeNodeId?: string;
+    bdSeq?: bigint;
+    expectedSeq?: bigint;
+    ndeathPublished?: boolean;
+    birthTimestamp?: number;
   };
 }
 
