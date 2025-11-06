@@ -63,37 +63,25 @@ export function SimulatorControls({
               disabled:opacity-50 disabled:cursor-not-allowed
             `}
           >
-            {isRunning ? (
-              <>
-                <span>⏸️</span>
-                <span>Pause</span>
-              </>
-            ) : (
-              <>
-                <span>▶️</span>
-                <span>{stats.uptime > 0 ? 'Resume' : 'Start'}</span>
-              </>
-            )}
+            {isRunning ? 'Pause' : stats.uptime > 0 ? 'Resume' : 'Start'}
           </button>
 
           {/* Stop Button */}
           <button
             onClick={stopSimulation}
             disabled={!isRunning && stats.uptime === 0}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span>⏹️</span>
-            <span>Stop</span>
+            Stop
           </button>
 
           {/* Reset Button */}
           <button
             onClick={resetSimulation}
             disabled={stats.uptime === 0}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span>🔄</span>
-            <span>Reset</span>
+            Reset
           </button>
 
           {/* Divider */}
@@ -102,19 +90,17 @@ export function SimulatorControls({
           {/* Add Node Button */}
           <button
             onClick={onAddNode}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
           >
-            <span>+</span>
-            <span>Add Node</span>
+            + Add Node
           </button>
 
           {/* Load Template Button */}
           <button
             onClick={onLoadTemplate}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
           >
-            <span>📋</span>
-            <span>Templates</span>
+            Templates
           </button>
         </div>
 
@@ -186,14 +172,14 @@ export function SimulatorControls({
               className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm transition-colors"
               title="Export configuration"
             >
-              📤
+              Export
             </button>
             <button
               onClick={onImportConfig}
               className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm transition-colors"
               title="Import configuration"
             >
-              📥
+              Import
             </button>
           </div>
         </div>

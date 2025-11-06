@@ -68,7 +68,6 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
         style={{ width: panelWidth, minWidth: panelWidth }}
       >
         <div className="text-center text-slate-500">
-          <div className="text-4xl mb-2">👈</div>
           <p>Select a node or device to configure</p>
         </div>
 
@@ -173,9 +172,9 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
         </h3>
         <button
           onClick={handleClose}
-          className="text-slate-400 hover:text-white transition-colors"
+          className="text-slate-400 hover:text-white transition-colors px-2"
         >
-          ✕
+          ×
         </button>
       </div>
 

@@ -284,7 +284,7 @@ export function ToolPanel({ isOpen, onToggle, templates, onDragStart }: ToolPane
               /* Create template from selection */
             }}
           >
-            💾 Save Selection as Template
+            Save as Template
           </button>
           <button
             className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors"
@@ -292,7 +292,7 @@ export function ToolPanel({ isOpen, onToggle, templates, onDragStart }: ToolPane
               /* Clear canvas */
             }}
           >
-            🗑️ Clear Canvas
+            Clear Canvas
           </button>
         </div>
 

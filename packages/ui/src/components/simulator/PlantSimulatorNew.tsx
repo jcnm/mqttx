@@ -465,7 +465,6 @@ export function PlantSimulatorNew() {
           {storeNodes.size === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="text-center max-w-lg pointer-events-auto bg-slate-900/95 backdrop-blur rounded-xl p-8 border border-slate-700 shadow-2xl">
-                <div className="text-6xl mb-4">🏭</div>
                 <h3 className="text-2xl font-bold text-white mb-2">
                   Design Your Industrial Plant
                 </h3>
@@ -484,7 +483,7 @@ export function PlantSimulatorNew() {
                     onClick={() => setToolPanelOpen(true)}
                     className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
                   >
-                    📋 Browse Templates
+                    Browse Templates
                   </button>
                 </div>
               </div>
@@ -492,14 +491,16 @@ export function PlantSimulatorNew() {
           )}
         </div>
 
-        {/* Configuration Panel - Right Side */}
-        {selectedNode && (
-          <ConfigPanel
-            node={selectedNode}
-            onClose={() => setSelectedNodeId(null)}
-            onUpdate={(updates) => updateNode(selectedNodeId!, updates)}
-          />
-        )}
+        {/* Configuration Panel - Right Side - Always render */}
+        <ConfigPanel
+          node={selectedNode || undefined}
+          onClose={() => setSelectedNodeId(null)}
+          onUpdate={(updates) => {
+            if (selectedNodeId) {
+              updateNode(selectedNodeId, updates);
+            }
+          }}
+        />
       </div>
     </div>
   );
