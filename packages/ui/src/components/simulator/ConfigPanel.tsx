@@ -8,7 +8,7 @@ import { useSimulatorStore } from '../../stores/simulatorStore';
 import { MetricEditor } from './MetricEditor';
 import type { MetricDefinition, SimulatedEoN } from '../../types/simulator.types';
 
-type TabType = 'identity' | 'configuration' | 'metrics' | 'lifecycle';
+type TabType = 'identity' | 'devices' | 'configuration' | 'metrics' | 'lifecycle';
 
 interface ConfigPanelProps {
   node?: SimulatedEoN;
@@ -140,6 +140,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
 
   const tabs: { id: TabType; label: string }[] = [
     { id: 'identity', label: 'Identity' },
+    { id: 'devices', label: 'Devices' },
     { id: 'configuration', label: 'Configuration' },
     { id: 'metrics', label: 'Metrics' },
     { id: 'lifecycle', label: 'Lifecycle' },
@@ -223,8 +224,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                         type="text"
                         value={node.config.groupId}
                         onChange={(e) =>
-                          updateNode(selectedNode!, {
-                            ...node,
+                          handleUpdate({
                             config: { ...node.config, groupId: e.target.value },
                           })
                         }
@@ -239,8 +239,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                         type="text"
                         value={node.config.edgeNodeId}
                         onChange={(e) =>
-                          updateNode(selectedNode!, {
-                            ...node,
+                          handleUpdate({
                             config: { ...node.config, edgeNodeId: e.target.value },
                           })
                         }
@@ -264,6 +263,82 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
               </div>
             )}
 
+            {/* Devices Tab */}
+            {activeTab === 'devices' && isEoN && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-sm font-semibold text-white">
+                    Devices ({node.devices?.length || 0})
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Drag devices from the left panel to add
+                  </p>
+                </div>
+
+                {(node.devices || []).length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 border-2 border-dashed border-slate-700 rounded-lg">
+                    <p className="text-lg mb-2">📟</p>
+                    <p>No devices attached</p>
+                    <p className="text-xs mt-1">
+                      Select this node and drag a device from the left panel
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(node.devices || []).map((device, index) => (
+                      <div
+                        key={device.id}
+                        className="bg-slate-800 rounded-lg p-3 border border-slate-700 hover:border-slate-600 transition-colors"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h5 className="text-sm font-medium text-white">
+                                {device.deviceId}
+                              </h5>
+                              <span className="px-2 py-0.5 bg-purple-900/50 text-purple-400 rounded text-xs">
+                                {device.protocol}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-400">
+                              {device.metrics?.length || 0} metrics • {device.dataProduction.frequency}ms
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const updatedDevices = node.devices.filter((_, i) => i !== index);
+                              handleUpdate({ devices: updatedDevices });
+                            }}
+                            className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-slate-700">
+                          <p className="text-xs text-slate-500 mb-1">Metrics:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {device.metrics?.slice(0, 6).map((metric) => (
+                              <span
+                                key={metric.name}
+                                className="px-1.5 py-0.5 bg-slate-900 text-slate-300 rounded text-xs"
+                              >
+                                {metric.name}
+                              </span>
+                            ))}
+                            {device.metrics && device.metrics.length > 6 && (
+                              <span className="px-1.5 py-0.5 bg-slate-900 text-slate-400 rounded text-xs">
+                                +{device.metrics.length - 6} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Configuration Tab */}
             {activeTab === 'configuration' && (
               <div className="space-y-4">
@@ -274,8 +349,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                   <select
                     value={node.config?.protocol || 'SparkplugB'}
                     onChange={(e) =>
-                      updateNode(selectedNode!, {
-                        ...node,
+                      handleUpdate({
                         config: {
                           ...node.config,
                           protocol: e.target.value as 'SparkplugB' | 'RawMQTTv5',
@@ -298,8 +372,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                       <select
                         value={node.config.sparkplugConfig.bdSeqStrategy}
                         onChange={(e) =>
-                          updateNode(selectedNode!, {
-                            ...node,
+                          handleUpdate({
                             config: {
                               ...node.config,
                               sparkplugConfig: {
@@ -324,8 +397,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                         type="number"
                         value={node.config.sparkplugConfig.rebirthTimeout}
                         onChange={(e) =>
-                          updateNode(selectedNode!, {
-                            ...node,
+                          handleUpdate({
                             config: {
                               ...node.config,
                               sparkplugConfig: {
@@ -345,8 +417,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                       <select
                         value={node.config.network.qos}
                         onChange={(e) =>
-                          updateNode(selectedNode!, {
-                            ...node,
+                          handleUpdate({
                             config: {
                               ...node.config,
                               network: {
@@ -369,8 +440,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                         id="cleanSession"
                         checked={node.config.network.cleanSession}
                         onChange={(e) =>
-                          updateNode(selectedNode!, {
-                            ...node,
+                          handleUpdate({
                             config: {
                               ...node.config,
                               network: {
@@ -458,8 +528,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                     id="autoReconnect"
                     checked={node.config.lifecycle.autoReconnect}
                     onChange={(e) =>
-                      updateNode(selectedNode!, {
-                        ...node,
+                      handleUpdate({
                         config: {
                           ...node.config,
                           lifecycle: {
@@ -485,8 +554,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                       type="number"
                       value={node.config.lifecycle.reconnectDelay || 5000}
                       onChange={(e) =>
-                        updateNode(selectedNode!, {
-                          ...node,
+                        handleUpdate({
                           config: {
                             ...node.config,
                             lifecycle: {
@@ -509,8 +577,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                     type="text"
                     value={node.config.lifecycle.birthSchedule || ''}
                     onChange={(e) =>
-                      updateNode(selectedNode!, {
-                        ...node,
+                      handleUpdate({
                         config: {
                           ...node.config,
                           lifecycle: {
@@ -533,8 +600,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
                     type="text"
                     value={node.config.lifecycle.deathSchedule || ''}
                     onChange={(e) =>
-                      updateNode(selectedNode!, {
-                        ...node,
+                      handleUpdate({
                         config: {
                           ...node.config,
                           lifecycle: {
