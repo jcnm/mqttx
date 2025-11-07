@@ -10,6 +10,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { EnhancedReactFlowCanvas } from './EnhancedReactFlowCanvas';
 import { SimulatorControls } from './SimulatorControls';
 import { ConfigPanel } from './ConfigPanel';
+import { EoNTraceView } from './EoNTraceView';
 import { ToolPanel } from './ToolPanel';
 import { createSimulationEngine } from '../../services/simulationEngine';
 import type {
@@ -597,16 +598,23 @@ export function PlantSimulatorNew() {
           )}
         </div>
 
-        {/* Configuration Panel - Right Side - Always render */}
-        <ConfigPanel
-          node={selectedNode || undefined}
-          onClose={() => setSelectedNodeId(null)}
-          onUpdate={(updates) => {
-            if (selectedNodeId) {
-              updateNode(selectedNodeId, updates);
-            }
-          }}
-        />
+        {/* Configuration Panel or Trace View - Right Side */}
+        {selectedNode && selectedNode.state === 'running' ? (
+          <EoNTraceView
+            node={selectedNode}
+            onClose={() => setSelectedNodeId(null)}
+          />
+        ) : (
+          <ConfigPanel
+            node={selectedNode || undefined}
+            onClose={() => setSelectedNodeId(null)}
+            onUpdate={(updates) => {
+              if (selectedNodeId) {
+                updateNode(selectedNodeId, updates);
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );
