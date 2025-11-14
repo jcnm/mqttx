@@ -3,8 +3,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useMQTTStore } from './stores/mqttStore';
 import { useBrokerStore } from './stores/brokerStore';
 import { useSettingsStore } from './stores/settingsStore';
+import { useAuthStore } from './stores/authStore';
 import { Header } from './components/layout/Header';
 import { SettingsModal } from './components/settings/SettingsModal';
+import { LoginPage } from './components/auth/LoginPage';
 
 // Components
 import { SCADAView } from './components/scada/SCADAView';
@@ -16,9 +18,20 @@ function App() {
   const { connect, disconnect, isConnected, setOnMessage } = useMQTTStore();
   const { addLog } = useBrokerStore();
   const { getBrokerUrl } = useSettingsStore();
+  const { user, checkAuth } = useAuthStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
+    // Check for existing authentication on mount
+    checkAuth();
+    setAuthChecked(true);
+  }, [checkAuth]);
+
+  useEffect(() => {
+    // Only connect to broker if authenticated
+    if (!user) return;
+
     // Connect to broker on mount using settings
     const brokerUrl = getBrokerUrl();
     connect(brokerUrl);
@@ -31,7 +44,21 @@ function App() {
     return () => {
       disconnect();
     };
-  }, [connect, disconnect, setOnMessage, addLog, getBrokerUrl]);
+  }, [user, connect, disconnect, setOnMessage, addLog, getBrokerUrl]);
+
+  // Wait for auth check to complete
+  if (!authChecked) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-950">
+        <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!user) {
+    return <LoginPage onLoginSuccess={() => {}} />;
+  }
 
   return (
     <BrowserRouter>
