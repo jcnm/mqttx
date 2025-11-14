@@ -9,11 +9,14 @@ import websocket from '@fastify/websocket';
 import { ConfigLoader } from './config/loader.js';
 import { StateManager } from '@sparkplug/state';
 import { SparkplugBroker } from './mqtt/broker.js';
+import { registerSCADARoutes } from './routes/scada.js';
+import type { SCADAHistoryService } from './services/scada-history.js';
 
 export interface ServerOptions {
   config: ConfigLoader;
   broker: SparkplugBroker;
   stateManager: StateManager;
+  historyService?: SCADAHistoryService;
 }
 
 export async function createServer(options: ServerOptions) {
@@ -230,6 +233,11 @@ export async function createServer(options: ServerOptions) {
       monitor.off('clientDisconnect', clientDisconnectHandler);
       monitor.off('sessionStale', sessionStaleHandler);
     });
+  });
+
+  // Register SCADA routes
+  await registerSCADARoutes(fastify, {
+    historyService: options.historyService,
   });
 
   return fastify;

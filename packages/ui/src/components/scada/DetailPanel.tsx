@@ -8,8 +8,10 @@ import { format } from 'date-fns';
 import { useSCADAStore } from '../../stores/scadaStore';
 import { MetricGrid } from './MetricDisplay';
 import { DeviceCard } from './DeviceCard';
+import { TemplateDisplay } from './TemplateDisplay';
+import { DataSetTable } from './DataSetTable';
 
-type TabType = 'overview' | 'metrics' | 'birth' | 'history';
+type TabType = 'overview' | 'metrics' | 'birth' | 'history' | 'templates' | 'datasets';
 
 export function DetailPanel() {
   const { nodes, devices, selectedNode, selectedDevice, setSelectedNode, setSelectedDevice } =
@@ -73,20 +75,39 @@ export function DetailPanel() {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
   };
 
-  // Filter metrics
-  const filteredMetrics = useMemo(() => {
-    if (!entity) return new Map();
+  // Extract templates and datasets
+  const { templates, datasets, regularMetrics } = useMemo(() => {
+    const templates = new Map();
+    const datasets = new Map();
+    const regularMetrics = new Map();
 
-    if (!metricSearch) return entity.metrics;
+    entity?.metrics.forEach((metric, name) => {
+      if (metric.datatype === 19) {
+        // Template
+        templates.set(name, { template: metric.value, timestamp: metric.timestamp });
+      } else if (metric.datatype === 16) {
+        // DataSet
+        datasets.set(name, { dataset: metric.value, timestamp: metric.timestamp });
+      } else {
+        regularMetrics.set(name, metric);
+      }
+    });
+
+    return { templates, datasets, regularMetrics };
+  }, [entity]);
+
+  // Filter metrics (only regular metrics, excluding templates and datasets)
+  const filteredMetrics = useMemo(() => {
+    if (!metricSearch) return regularMetrics;
 
     const filtered = new Map();
-    entity.metrics.forEach((metric, name) => {
+    regularMetrics.forEach((metric, name) => {
       if (name.toLowerCase().includes(metricSearch.toLowerCase())) {
         filtered.set(name, metric);
       }
     });
     return filtered;
-  }, [entity, metricSearch]);
+  }, [regularMetrics, metricSearch]);
 
   // Empty state
   if (!entity) {
@@ -107,9 +128,11 @@ export function DetailPanel() {
 
   const tabs: { id: TabType; label: string }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'metrics', label: `Metrics (${entity.metrics.size})` },
+    { id: 'metrics', label: `Metrics (${regularMetrics.size})` },
     { id: 'birth', label: 'Birth Certificate' },
     { id: 'history', label: 'History' },
+    { id: 'templates', label: `Templates (${templates.size})` },
+    { id: 'datasets', label: `DataSets (${datasets.size})` },
   ];
 
   return (
@@ -401,6 +424,54 @@ export function DetailPanel() {
                 Metric history tracking coming in Phase 4
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Templates Tab */}
+        {activeTab === 'templates' && (
+          <div className="space-y-4">
+            {templates.size > 0 ? (
+              Array.from(templates.entries()).map(([name, { template, timestamp }]) => (
+                <TemplateDisplay
+                  key={name}
+                  name={name}
+                  template={template}
+                  timestamp={timestamp}
+                />
+              ))
+            ) : (
+              <div className="text-center py-8 text-slate-400">
+                <div className="text-4xl mb-2">📋</div>
+                <p>No templates defined</p>
+                <p className="text-xs text-slate-500 mt-2">
+                  Templates (UDT) will appear here when received in Sparkplug B messages
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* DataSets Tab */}
+        {activeTab === 'datasets' && (
+          <div className="space-y-4">
+            {datasets.size > 0 ? (
+              Array.from(datasets.entries()).map(([name, { dataset, timestamp }]) => (
+                <DataSetTable
+                  key={name}
+                  name={name}
+                  dataset={dataset}
+                  timestamp={timestamp}
+                />
+              ))
+            ) : (
+              <div className="text-center py-8 text-slate-400">
+                <div className="text-4xl mb-2">📊</div>
+                <p>No datasets available</p>
+                <p className="text-xs text-slate-500 mt-2">
+                  DataSets will appear here when received in Sparkplug B messages
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

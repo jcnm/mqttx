@@ -10,6 +10,7 @@ import { GridView } from './GridView';
 import { TreeView } from './TreeView';
 import { DetailPanel } from './DetailPanel';
 import { FilterPanel } from './FilterPanel';
+import { StateIndicator } from './StateIndicator';
 import { processSparkplugMessage, calculateMessagesPerSecond } from '../../services/sparkplugProcessor';
 
 export function SCADAView() {
@@ -180,8 +181,9 @@ export function SCADAView() {
         {/* Main Content Area */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Filter Panel (Left Sidebar) */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-6">
             <FilterPanel />
+            <StateIndicator />
           </div>
 
           {/* Content Area (Main) */}
