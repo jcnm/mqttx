@@ -126,13 +126,43 @@ export function DetailPanel() {
     );
   }
 
-  const tabs: { id: TabType; label: string }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'metrics', label: `Metrics (${regularMetrics.size})` },
-    { id: 'birth', label: 'Birth Certificate' },
-    { id: 'history', label: 'History' },
-    { id: 'templates', label: `Templates (${templates.size})` },
-    { id: 'datasets', label: `DataSets (${datasets.size})` },
+  const tabs: { id: TabType; icon: string; label: string; tooltip: string }[] = [
+    {
+      id: 'overview',
+      icon: '📊',
+      label: 'Overview',
+      tooltip: 'Overview - General information and statistics'
+    },
+    {
+      id: 'metrics',
+      icon: '📈',
+      label: `Metrics (${regularMetrics.size})`,
+      tooltip: `Metrics - Real-time metric values (${regularMetrics.size})`
+    },
+    {
+      id: 'birth',
+      icon: '🎂',
+      label: 'Birth',
+      tooltip: 'Birth Certificate - Initial connection data'
+    },
+    {
+      id: 'history',
+      icon: '📜',
+      label: 'History',
+      tooltip: 'History - Historical metric data over time'
+    },
+    {
+      id: 'templates',
+      icon: '📋',
+      label: `Templates (${templates.size})`,
+      tooltip: `Templates - User Defined Types (${templates.size})`
+    },
+    {
+      id: 'datasets',
+      icon: '🗂️',
+      label: `DataSets (${datasets.size})`,
+      tooltip: `DataSets - Tabular data structures (${datasets.size})`
+    },
   ];
 
   return (
@@ -213,20 +243,22 @@ export function DetailPanel() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
+              title={tab.tooltip}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'text-white border-b-2 border-emerald-600'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              {tab.label}
+              <span className="text-base">{tab.icon}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Tab Content */}
-      <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
+      {/* Tab Content - Scrollable Container */}
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-4 max-h-[calc(100vh-400px)] overflow-y-auto">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-4">
