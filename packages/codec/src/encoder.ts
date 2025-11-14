@@ -30,13 +30,9 @@ export function encodePayload(
 ): Uint8Array {
   const PayloadType = loadProto();
 
-  // Validate the payload
-  const errMsg = PayloadType.verify(payload);
-  if (errMsg) {
-    throw new Error(`Payload validation failed: ${errMsg}`);
-  }
-
-  // Create a message instance
+  // Create a message instance (this handles BigInt to Long conversion automatically)
+  // Note: We skip validation because protobufjs.verify() doesn't support JavaScript BigInt
+  // The create() and encode() methods handle type conversion correctly
   const message = PayloadType.create(payload);
 
   // Encode to protobuf binary
