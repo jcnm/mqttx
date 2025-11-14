@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import { useSCADAStore } from '../../stores/scadaStore';
 import { MetricGrid } from './MetricDisplay';
 import { DeviceCard } from './DeviceCard';
+import { MetricHistoryPanel } from './MetricHistoryPanel';
 
 type TabType = 'overview' | 'metrics' | 'birth' | 'history';
 
@@ -389,18 +390,19 @@ export function DetailPanel() {
         )}
 
         {/* History Tab */}
-        {activeTab === 'history' && (
-          <div>
-            <p className="text-sm text-slate-400 mb-4">
-              Historical metric data will be displayed here when metric history tracking
-              is implemented.
-            </p>
-            <div className="bg-slate-800 rounded-lg p-8 text-center">
-              <div className="text-4xl mb-2">📊</div>
-              <p className="text-slate-400">
-                Metric history tracking coming in Phase 4
-              </p>
-            </div>
+        {activeTab === 'history' && isNode && node && (
+          <MetricHistoryPanel
+            groupId={node.groupId}
+            edgeNodeId={node.edgeNodeId}
+            metricNames={Array.from(node.metrics.keys())}
+            timeRange={60}
+            refreshInterval={10000}
+          />
+        )}
+        {activeTab === 'history' && !isNode && device && (
+          <div className="text-center text-slate-400 py-8">
+            Device history tracking not yet implemented.
+            Please select a node to view metric history.
           </div>
         )}
       </div>

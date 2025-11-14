@@ -74,6 +74,7 @@ async function main() {
     config,
     broker,
     stateManager,
+    redis: persistence.getClient(), // Pass Redis client for SCADA history
   });
 
   const apiPort = process.env.API_PORT || 3000;

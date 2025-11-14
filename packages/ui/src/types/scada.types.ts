@@ -36,7 +36,7 @@ export interface EoNNode {
   lastUpdate?: bigint;
 }
 
-export type ViewMode = 'grid' | 'tree' | 'detail';
+export type ViewMode = 'grid' | 'tree' | 'detail' | 'alarms';
 
 export interface SCADAFilter {
   groupId?: string;

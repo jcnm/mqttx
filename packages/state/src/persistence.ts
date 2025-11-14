@@ -72,6 +72,10 @@ export class StatePersistence {
     return this.connected;
   }
 
+  getClient(): Redis {
+    return this.redis;
+  }
+
   // Node State Persistence
   async saveNodeState(state: NodeState): Promise<void> {
     const key = `${this.keyPrefix}nodes:${state.groupId}:${state.edgeNodeId}`;

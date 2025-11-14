@@ -4,17 +4,23 @@
  */
 
 import { useEffect, useMemo } from 'react';
+import { Toaster } from 'react-hot-toast';
 import { useSCADAStore } from '../../stores/scadaStore';
 import { useMQTTStore } from '../../stores/mqttStore';
 import { GridView } from './GridView';
 import { TreeView } from './TreeView';
 import { DetailPanel } from './DetailPanel';
 import { FilterPanel } from './FilterPanel';
+import { AlarmPanel } from './AlarmPanel';
 import { processSparkplugMessage, calculateMessagesPerSecond } from '../../services/sparkplugProcessor';
+import { useAlarmMonitoring } from '../../hooks/useAlarmMonitoring';
 
 export function SCADAView() {
   const { nodes, devices, viewMode, setViewMode, addNode, updateNode, addDevice, updateDevice } = useSCADAStore();
   const { isConnected, messages } = useMQTTStore();
+
+  // Enable alarm monitoring
+  useAlarmMonitoring();
 
   // Process incoming MQTT messages and update SCADA store
   useEffect(() => {
@@ -160,10 +166,10 @@ export function SCADAView() {
 
         {/* View Mode Tabs */}
         <div className="mb-6 flex gap-2">
-          {(['grid', 'tree', 'detail'] as const).map((mode) => (
+          {(['grid', 'tree', 'detail', 'alarms'] as const).map((mode) => (
             <button
               key={mode}
-              onClick={() => setViewMode(mode)}
+              onClick={() => setViewMode(mode as any)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 viewMode === mode
                   ? 'bg-emerald-600 text-white'
@@ -173,6 +179,7 @@ export function SCADAView() {
               {mode === 'grid' && '⊞ Grid View'}
               {mode === 'tree' && '⊟ Tree View'}
               {mode === 'detail' && '⊡ Detail View'}
+              {mode === 'alarms' && '🚨 Alarms'}
             </button>
           ))}
         </div>
@@ -190,10 +197,14 @@ export function SCADAView() {
               {viewMode === 'grid' && <GridView />}
               {viewMode === 'tree' && <TreeView />}
               {viewMode === 'detail' && <DetailPanel />}
+              {viewMode === 'alarms' && <AlarmPanel />}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Toast Notifications */}
+      <Toaster />
     </div>
   );
 }
