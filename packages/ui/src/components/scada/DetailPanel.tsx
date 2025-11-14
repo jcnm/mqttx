@@ -5,6 +5,16 @@
 
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
+import {
+  BarChart3,
+  TrendingUp,
+  Cake,
+  ScrollText,
+  Clipboard,
+  FolderOpen,
+  X,
+  Copy
+} from 'lucide-react';
 import { useSCADAStore } from '../../stores/scadaStore';
 import { MetricGrid } from './MetricDisplay';
 import { DeviceCard } from './DeviceCard';
@@ -126,40 +136,40 @@ export function DetailPanel() {
     );
   }
 
-  const tabs: { id: TabType; icon: string; label: string; tooltip: string }[] = [
+  const tabs: { id: TabType; icon: React.ComponentType<{ className?: string }>; label: string; tooltip: string }[] = [
     {
       id: 'overview',
-      icon: '📊',
+      icon: BarChart3,
       label: 'Overview',
       tooltip: 'Overview - General information and statistics'
     },
     {
       id: 'metrics',
-      icon: '📈',
+      icon: TrendingUp,
       label: `Metrics (${regularMetrics.size})`,
       tooltip: `Metrics - Real-time metric values (${regularMetrics.size})`
     },
     {
       id: 'birth',
-      icon: '🎂',
+      icon: Cake,
       label: 'Birth',
       tooltip: 'Birth Certificate - Initial connection data'
     },
     {
       id: 'history',
-      icon: '📜',
+      icon: ScrollText,
       label: 'History',
       tooltip: 'History - Historical metric data over time'
     },
     {
       id: 'templates',
-      icon: '📋',
+      icon: Clipboard,
       label: `Templates (${templates.size})`,
       tooltip: `Templates - User Defined Types (${templates.size})`
     },
     {
       id: 'datasets',
-      icon: '🗂️',
+      icon: FolderOpen,
       label: `DataSets (${datasets.size})`,
       tooltip: `DataSets - Tabular data structures (${datasets.size})`
     },
@@ -199,38 +209,14 @@ export function DetailPanel() {
               className="p-2 text-slate-400 hover:text-white transition-colors"
               title="Copy to clipboard"
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                />
-              </svg>
+              <Copy className="w-5 h-5" />
             </button>
             <button
               onClick={handleClose}
               className="p-2 text-slate-400 hover:text-white transition-colors"
               title="Close"
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -239,21 +225,24 @@ export function DetailPanel() {
       {/* Tabs */}
       <div className="border-b border-slate-800">
         <div className="flex gap-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              title={tab.tooltip}
-              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'text-white border-b-2 border-emerald-600'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <span className="text-base">{tab.icon}</span>
-              <span className="hidden sm:inline">{tab.label}</span>
-            </button>
-          ))}
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                title={tab.tooltip}
+                className={`flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'text-white border-b-2 border-emerald-600'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
