@@ -1,7 +1,7 @@
 // Sparkplug B Protocol Buffers Encoder
 // Encodes TypeScript objects to Sparkplug B protobuf format
 
-import * as protobuf from 'protobufjs';
+import protobuf from 'protobufjs';
 import { gzip } from 'pako';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

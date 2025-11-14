@@ -1,7 +1,7 @@
 // Sparkplug B Protocol Buffers Decoder
 // Decodes Sparkplug B protobuf binary to TypeScript objects
 
-import * as protobuf from 'protobufjs';
+import protobuf from 'protobufjs';
 import { ungzip } from 'pako';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
