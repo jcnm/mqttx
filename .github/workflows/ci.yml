@@ -58,7 +58,7 @@ jobs:
 
       - name: Run tests
         run: pnpm test
-        continue-on-error: true  # Don't fail CI yet since tests are incomplete
+        continue-on-error: false  # Tests are now comprehensive and should pass
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
