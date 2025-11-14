@@ -11,6 +11,7 @@ import { encodePayload } from '@sparkplug/codec';
 import { ConnectionConfigPanel, type MQTTConnectionConfig } from './ConnectionConfigPanel';
 import { TargetSelector, type CommandTarget } from './TargetSelector';
 import { SparkplugCommandBuilder, type SparkplugCommand } from './SparkplugCommandBuilder';
+import { commandTracker } from '../../services/commandTracker';
 
 type Tab = 'send' | 'history' | 'scheduled';
 
@@ -225,7 +226,7 @@ export function CommandPanel() {
       });
 
       // Add to command history
-      createCommand({
+      const commandId = createCommand({
         type: command.messageType as any, // Cast for now - will match CommandType
         target: {
           groupId: target.groupId || 'Unknown',
@@ -247,6 +248,22 @@ export function CommandPanel() {
           type: 'immediate',
         },
       });
+
+      // Register command for ACK tracking (NCMD/DCMD only)
+      if (command.messageType === 'NCMD' || command.messageType === 'DCMD') {
+        commandTracker.registerCommand(commandId, {
+          id: commandId,
+          type: command.messageType,
+          target: {
+            groupId: target.groupId || 'Unknown',
+            edgeNodeId: target.edgeNodeId || 'Unknown',
+            deviceId: target.deviceId || target.deviceIdNew,
+          },
+          metrics: command.metrics.map(m => m.name || 'unnamed'),
+          sentAt: Date.now(),
+          timeout: 30000, // 30 seconds
+        });
+      }
 
       setSendSuccess(`✅ Command sent successfully on topic: ${topic}`);
       setIsSending(false);
