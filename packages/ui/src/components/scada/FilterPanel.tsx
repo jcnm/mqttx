@@ -27,6 +27,7 @@ export function FilterPanel() {
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filter.groupId) count++;
+    if (filter.edgeNodeId) count++;
     if (filter.searchTerm) count++;
     if (filter.showOffline === false) count++;
     if (filter.tags && filter.tags.length > 0) count++;
@@ -36,6 +37,7 @@ export function FilterPanel() {
   const handleClearFilters = () => {
     setFilter({
       groupId: undefined,
+      edgeNodeId: undefined,
       searchTerm: undefined,
       showOffline: true,
       tags: undefined,
@@ -103,8 +105,8 @@ export function FilterPanel() {
           Edge Node ID
         </label>
         <select
-          value={filter.searchTerm || ''}
-          onChange={(e) => setFilter({ searchTerm: e.target.value || undefined })}
+          value={filter.edgeNodeId || ''}
+          onChange={(e) => setFilter({ edgeNodeId: e.target.value || undefined })}
           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent"
         >
           <option value="">All Nodes</option>

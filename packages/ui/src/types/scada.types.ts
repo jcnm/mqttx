@@ -40,6 +40,7 @@ export type ViewMode = 'grid' | 'tree' | 'detail' | 'alarms';
 
 export interface SCADAFilter {
   groupId?: string;
+  edgeNodeId?: string; // Separate field for Edge Node ID filter
   searchTerm?: string;
   showOffline?: boolean;
   tags?: string[];
