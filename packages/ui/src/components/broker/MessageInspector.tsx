@@ -11,7 +11,7 @@ interface MessageInspectorProps {
   onClose: () => void;
 }
 
-type InspectorTab = 'overview' | 'mqtt' | 'raw' | 'sparkplug' | 'session';
+type InspectorTab = 'overview' | 'layers' | 'mqtt' | 'raw' | 'sparkplug' | 'session';
 
 export function MessageInspector({ log, onClose }: MessageInspectorProps) {
   const [activeTab, setActiveTab] = useState<InspectorTab>('overview');
@@ -39,7 +39,7 @@ export function MessageInspector({ log, onClose }: MessageInspectorProps) {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-700 px-4">
-          {(['overview', 'mqtt', 'raw', 'sparkplug', 'session'] as InspectorTab[]).map((tab) => (
+          {(['overview', 'layers', 'mqtt', 'raw', 'sparkplug', 'session'] as InspectorTab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -57,6 +57,7 @@ export function MessageInspector({ log, onClose }: MessageInspectorProps) {
         {/* Content */}
         <div className="flex-1 overflow-auto p-4">
           {activeTab === 'overview' && <OverviewTab log={log} />}
+          {activeTab === 'layers' && <LayersTab log={log} />}
           {activeTab === 'mqtt' && <MQTTTab log={log} />}
           {activeTab === 'raw' && <RawTab log={log} />}
           {activeTab === 'sparkplug' && <SparkplugTab log={log} />}
@@ -117,6 +118,231 @@ function OverviewTab({ log }: { log: BrokerLog }) {
       )}
     </div>
   );
+}
+
+function LayersTab({ log }: { log: BrokerLog }) {
+  const [expandedLayers, setExpandedLayers] = useState<Set<string>>(new Set(['layer1', 'layer2', 'layer3']));
+
+  const toggleLayer = (layer: string) => {
+    const newExpanded = new Set(expandedLayers);
+    if (newExpanded.has(layer)) {
+      newExpanded.delete(layer);
+    } else {
+      newExpanded.add(layer);
+    }
+    setExpandedLayers(newExpanded);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="text-sm text-gray-400 mb-4">
+        Protocol stack inspection - click layers to expand/collapse
+      </div>
+
+      {/* Layer 1: Network/Transport Layer */}
+      <LayerSection
+        title="Layer 1: Network & Transport"
+        icon="🌐"
+        expanded={expandedLayers.has('layer1')}
+        onToggle={() => toggleLayer('layer1')}
+      >
+        <div className="space-y-2">
+          <InfoRow label="Source IP" value={log.origin.ip} />
+          <InfoRow label="Source Port" value={log.origin.port.toString()} />
+          <InfoRow label="Protocol" value="TCP (Transmission Control Protocol)" />
+          <InfoRow label="Connection" value="WebSocket over TCP" />
+          {log.mqttPacket && (
+            <>
+              <InfoRow label="Packet Size" value={`${log.mqttPacket.totalPacketSize || log.payload?.length || 0} bytes`} />
+              <div className="text-xs text-gray-500 mt-2">
+                Ethernet → IP → TCP → WebSocket
+              </div>
+            </>
+          )}
+        </div>
+      </LayerSection>
+
+      {/* Layer 2: MQTT Layer */}
+      <LayerSection
+        title="Layer 2: MQTT (Message Queuing Telemetry Transport)"
+        icon="📨"
+        expanded={expandedLayers.has('layer2')}
+        onToggle={() => toggleLayer('layer2')}
+      >
+        <div className="space-y-2">
+          <InfoRow label="Protocol" value="MQTT" />
+          {log.mqttPacket?.fixedHeader && (
+            <>
+              <InfoRow label="Packet Type" value={log.mqttPacket.fixedHeader.messageTypeName || 'PUBLISH'} />
+              <InfoRow label="DUP Flag" value={log.mqttPacket.fixedHeader.dup ? 'Yes' : 'No'} />
+              <InfoRow label="QoS Level" value={log.qos?.toString() || '0'} />
+              <InfoRow label="Retain Flag" value={log.retain ? 'Yes' : 'No'} />
+            </>
+          )}
+          {log.topic && <InfoRow label="Topic" value={log.topic} />}
+          {log.clientId && <InfoRow label="Client ID" value={log.clientId} />}
+          {log.mqttPacket?.variableHeader?.properties && (
+            <div className="mt-2">
+              <div className="text-xs font-medium text-gray-300">MQTT Properties:</div>
+              <pre className="bg-gray-800 p-2 rounded text-xs mt-1 overflow-auto max-h-40">
+                {JSON.stringify(log.mqttPacket.variableHeader.properties, null, 2)}
+              </pre>
+            </div>
+          )}
+          <InfoRow label="Payload Length" value={`${log.payload?.length || 0} bytes`} />
+        </div>
+      </LayerSection>
+
+      {/* Layer 3: Sparkplug B Layer */}
+      <LayerSection
+        title="Layer 3: Sparkplug B (Industrial IoT Payload)"
+        icon="⚡"
+        expanded={expandedLayers.has('layer3')}
+        onToggle={() => toggleLayer('layer3')}
+      >
+        {log.decoded ? (
+          <div className="space-y-2">
+            <InfoRow label="Specification" value="Eclipse Sparkplug B (ISO/IEC 20237:2023)" />
+            <InfoRow label="Message Type" value={log.messageType || extractMessageType(log.topic || '')} />
+            {log.decoded.timestamp && (
+              <InfoRow label="Timestamp" value={new Date(Number(log.decoded.timestamp)).toISOString()} />
+            )}
+            {log.decoded.seq !== undefined && (
+              <InfoRow label="Sequence Number" value={log.decoded.seq.toString()} />
+            )}
+            {log.decoded.metrics && (
+              <>
+                <InfoRow label="Metric Count" value={log.decoded.metrics.length.toString()} />
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-gray-300 mb-2">Metrics Payload:</div>
+                  <div className="space-y-2 max-h-96 overflow-auto">
+                    {log.decoded.metrics.map((metric: any, idx: number) => (
+                      <MetricCard key={idx} metric={metric} index={idx} />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            {log.sparkplugMetadata && (
+              <div className="mt-3 p-2 bg-gray-800 rounded">
+                <div className="text-xs font-medium text-gray-300 mb-1">Sparkplug Metadata:</div>
+                <div className="text-xs text-gray-400">
+                  {log.sparkplugMetadata.groupId && <div>Group: {log.sparkplugMetadata.groupId}</div>}
+                  {log.sparkplugMetadata.edgeNodeId && <div>Edge Node: {log.sparkplugMetadata.edgeNodeId}</div>}
+                  {log.sparkplugMetadata.deviceId && <div>Device: {log.sparkplugMetadata.deviceId}</div>}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-gray-400 text-sm">No Sparkplug B payload decoded</div>
+        )}
+      </LayerSection>
+
+      {/* Raw Hex Dump */}
+      {log.payload && (
+        <LayerSection
+          title="Raw Hex Dump"
+          icon="🔢"
+          expanded={expandedLayers.has('hex')}
+          onToggle={() => toggleLayer('hex')}
+        >
+          <div className="bg-gray-800 p-3 rounded font-mono text-xs overflow-auto max-h-64">
+            <HexDump data={log.payload} />
+          </div>
+        </LayerSection>
+      )}
+    </div>
+  );
+}
+
+// Helper component for layer sections
+function LayerSection({
+  title,
+  icon,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  icon: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border border-gray-700 rounded-lg overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full px-4 py-3 bg-gray-800 hover:bg-gray-750 flex items-center justify-between transition-colors"
+      >
+        <div className="flex items-center space-x-3">
+          <span className="text-lg">{icon}</span>
+          <span className="font-medium text-white text-sm">{title}</span>
+        </div>
+        <svg
+          className={`w-5 h-5 text-gray-400 transition-transform ${expanded ? 'transform rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {expanded && (
+        <div className="px-4 py-3 bg-gray-850">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Helper component for metric cards
+function MetricCard({ metric, index }: { metric: any; index: number }) {
+  return (
+    <div className="bg-gray-800 p-3 rounded border border-gray-700">
+      <div className="flex items-start justify-between mb-2">
+        <div className="font-medium text-white text-sm">
+          {metric.name || `Metric ${index}`}
+          {metric.alias !== undefined && (
+            <span className="ml-2 text-xs text-blue-400">#{metric.alias.toString()}</span>
+          )}
+        </div>
+        <div className="text-xs text-gray-400">
+          {getDataTypeName(metric.datatype)}
+        </div>
+      </div>
+      <div className="space-y-1 text-xs">
+        <div className="flex justify-between">
+          <span className="text-gray-400">Value:</span>
+          <span className="text-green-400 font-mono">{formatMetricValue(metric.value)}</span>
+        </div>
+        {metric.timestamp && (
+          <div className="flex justify-between">
+            <span className="text-gray-400">Timestamp:</span>
+            <span className="text-gray-300 font-mono text-xs">
+              {new Date(Number(metric.timestamp)).toISOString()}
+            </span>
+          </div>
+        )}
+        {metric.properties && (
+          <details className="mt-2">
+            <summary className="text-gray-400 cursor-pointer hover:text-white">Properties</summary>
+            <pre className="bg-gray-900 p-2 rounded mt-1 text-xs overflow-auto">
+              {JSON.stringify(metric.properties, null, 2)}
+            </pre>
+          </details>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Helper to extract message type from topic
+function extractMessageType(topic: string): string {
+  const match = topic.match(/spBv1\.0\/[^/]+\/([^/]+)\//);
+  return match ? match[1] : 'UNKNOWN';
 }
 
 function MQTTTab({ log }: { log: BrokerLog }) {

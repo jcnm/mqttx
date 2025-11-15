@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { useBrokerStore } from '../../stores/brokerStore';
 import { useMQTTStore } from '../../stores/mqttStore';
 import { encodePayload } from '@sparkplug/codec';
+import { formatMetricValue } from '../../services/sparkplugProcessor';
 import type { SimulatedEoN, MetricDefinition } from '../../types/simulator.types';
 import type { BrokerLog } from '../../types/broker.types';
 
@@ -28,6 +29,12 @@ export function EoNTraceView({ node, onClose }: EoNTraceViewProps) {
   const [showCommandPanel, setShowCommandPanel] = useState(false);
   const [sending, setSending] = useState(false);
 
+  // Helper to extract message type from topic
+  const extractMessageType = (topic: string): string | null => {
+    const match = topic.match(/spBv1\.0\/[^/]+\/([^/]+)\//);
+    return match ? match[1] : null;
+  };
+
   // Filter logs for this specific EoN node
   const nodeLogs = useMemo(() => {
     const groupId = node.config.groupId;
@@ -43,14 +50,17 @@ export function EoNTraceView({ node, onClose }: EoNTraceViewProps) {
 
       if (!topicPattern.test(log.topic)) return false;
 
+      // Get message type from log or extract from topic
+      const messageType = log.messageType || extractMessageType(log.topic);
+      if (!messageType) return false;
+
       // Apply direction filter
       if (filter === 'sent') {
         // Sent messages: NBIRTH, NDEATH, NDATA, DBIRTH, DDEATH, DDATA
-        return log.messageType &&
-          ['NBIRTH', 'NDEATH', 'NDATA', 'DBIRTH', 'DDEATH', 'DDATA'].includes(log.messageType);
+        return ['NBIRTH', 'NDEATH', 'NDATA', 'DBIRTH', 'DDEATH', 'DDATA'].includes(messageType);
       } else if (filter === 'received') {
         // Received messages: NCMD, DCMD
-        return log.messageType && ['NCMD', 'DCMD'].includes(log.messageType);
+        return ['NCMD', 'DCMD'].includes(messageType);
       }
 
       return true; // 'all' filter
@@ -59,12 +69,14 @@ export function EoNTraceView({ node, onClose }: EoNTraceViewProps) {
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const sent = nodeLogs.filter((log) =>
-      log.messageType && ['NBIRTH', 'NDEATH', 'NDATA', 'DBIRTH', 'DDEATH', 'DDATA'].includes(log.messageType)
-    ).length;
-    const received = nodeLogs.filter((log) =>
-      log.messageType && ['NCMD', 'DCMD'].includes(log.messageType)
-    ).length;
+    const sent = nodeLogs.filter((log) => {
+      const messageType = log.messageType || (log.topic ? extractMessageType(log.topic) : null);
+      return messageType && ['NBIRTH', 'NDEATH', 'NDATA', 'DBIRTH', 'DDEATH', 'DDATA'].includes(messageType);
+    }).length;
+    const received = nodeLogs.filter((log) => {
+      const messageType = log.messageType || (log.topic ? extractMessageType(log.topic) : null);
+      return messageType && ['NCMD', 'DCMD'].includes(messageType);
+    }).length;
 
     // Calculate messages per second (last 60 seconds)
     const oneMinuteAgo = Date.now() - 60000;
@@ -355,12 +367,110 @@ function MessageCard({ log }: { log: BrokerLog }) {
           <span className="text-xs text-slate-600">{expanded ? '▼' : '▶'}</span>
         </div>
 
-        {expanded && log.decoded && (
-          <div className="mt-3 pt-3 border-t border-slate-800">
-            <div className="text-xs text-slate-400 mb-2">Metrics:</div>
-            <pre className="text-xs text-slate-300 bg-slate-950 rounded p-2 overflow-x-auto">
-              {JSON.stringify(log.decoded.metrics, null, 2)}
-            </pre>
+        {expanded && (
+          <div className="mt-3 pt-3 border-t border-slate-800 space-y-3">
+            {log.decoded ? (
+              <>
+                {/* Sparkplug Metadata */}
+                <div className="grid grid-cols-2 gap-2">
+                  {log.decoded.timestamp && (
+                    <div className="text-xs">
+                      <span className="text-slate-500">Timestamp:</span>
+                      <div className="text-slate-300 font-mono">
+                        {new Date(Number(log.decoded.timestamp)).toISOString()}
+                      </div>
+                    </div>
+                  )}
+                  {log.decoded.seq !== undefined && (
+                    <div className="text-xs">
+                      <span className="text-slate-500">Sequence:</span>
+                      <div className="text-slate-300 font-mono">{log.decoded.seq.toString()}</div>
+                    </div>
+                  )}
+                  {log.decoded.uuid && (
+                    <div className="text-xs col-span-2">
+                      <span className="text-slate-500">UUID:</span>
+                      <div className="text-slate-300 font-mono text-xs break-all">{log.decoded.uuid}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Metrics */}
+                {log.decoded.metrics && log.decoded.metrics.length > 0 && (
+                  <div>
+                    <div className="text-xs text-slate-500 mb-2">
+                      Metrics ({log.decoded.metrics.length}):
+                    </div>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {log.decoded.metrics.map((metric: any, idx: number) => (
+                        <div key={idx} className="bg-slate-950 p-2 rounded border border-slate-800">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="text-xs font-medium text-white">
+                              {metric.name || `Metric ${idx}`}
+                              {metric.alias !== undefined && (
+                                <span className="ml-2 text-xs text-blue-400">#{metric.alias.toString()}</span>
+                              )}
+                            </div>
+                            {metric.datatype !== undefined && (
+                              <span className="text-xs text-slate-500">
+                                Type: {metric.datatype}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Value:</span>
+                            <span className="text-green-400 font-mono">
+                              {formatMetricValue(metric.value, metric.datatype || 0)}
+                            </span>
+                          </div>
+                          {metric.timestamp && (
+                            <div className="flex justify-between text-xs mt-1">
+                              <span className="text-slate-500">Time:</span>
+                              <span className="text-slate-400 font-mono text-xs">
+                                {new Date(Number(metric.timestamp)).toISOString()}
+                              </span>
+                            </div>
+                          )}
+                          {metric.properties && (
+                            <details className="mt-1">
+                              <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-400">
+                                Properties
+                              </summary>
+                              <pre className="bg-slate-900 p-1 rounded mt-1 text-xs overflow-auto">
+                                {JSON.stringify(metric.properties, null, 2)}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Body (for STATE messages) */}
+                {log.decoded.body && (
+                  <div className="text-xs">
+                    <span className="text-slate-500">Body:</span>
+                    <pre className="bg-slate-950 p-2 rounded mt-1 text-xs overflow-auto">
+                      {JSON.stringify(log.decoded.body, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-xs text-slate-500">
+                <div>Raw Payload ({log.payload?.length || 0} bytes):</div>
+                <pre className="bg-slate-950 p-2 rounded mt-1 text-xs overflow-auto max-h-32 font-mono">
+                  {log.payload ?
+                    Array.from(log.payload.slice(0, 256))
+                      .map(b => b.toString(16).padStart(2, '0'))
+                      .join(' ') +
+                    (log.payload.length > 256 ? '...' : '')
+                    : 'No payload'
+                  }
+                </pre>
+              </div>
+            )}
           </div>
         )}
       </div>
