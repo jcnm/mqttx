@@ -13,7 +13,7 @@ import type {
   PropertyValue,
 } from '../types/simulator.types';
 import { generateMetricValue, convertToDatatype, clampValue } from './dataGenerator';
-import { encodePayload } from '@sparkplug/codec';
+import { encodePayload, decodePayload } from '@sparkplug/codec';
 
 interface SimulationState {
   intervalId?: NodeJS.Timeout;
@@ -55,6 +55,47 @@ export class SimulationEngine {
     private mqttClient: MqttClient | null,
     private speedMultiplier: number = 1
   ) {}
+
+  /**
+   * Generate Will Message configuration for MQTT client
+   * CRITICAL: Sparkplug B spec REQUIRES Will Message for proper disconnect handling
+   *
+   * @param node - The primary node to create Will Message for
+   * @returns Will Message configuration object for MQTT client options
+   */
+  public static generateWillMessage(node: SimulatedEoN): {
+    topic: string;
+    payload: Buffer;
+    qos: 1;
+    retain: false;
+  } {
+    const topic = `spBv1.0/${node.config.groupId}/NDEATH/${node.config.edgeNodeId}`;
+
+    // Create NDEATH payload for Will Message
+    // Use bdSeq = 0 as placeholder (will be updated when actual connection is made)
+    const willPayload: SparkplugPayload = {
+      timestamp: BigInt(Date.now()),
+      metrics: [
+        {
+          name: 'bdSeq',
+          timestamp: BigInt(Date.now()),
+          datatype: 8, // UInt64
+          value: BigInt(0), // Placeholder
+        },
+      ],
+      seq: BigInt(0),
+    };
+
+    // Encode the payload
+    const encodedPayload = encodePayload(willPayload as any);
+
+    return {
+      topic,
+      payload: Buffer.from(encodedPayload),
+      qos: 1, // REQUIRED by Sparkplug B spec
+      retain: false, // MUST be false per spec
+    };
+  }
 
   /**
    * Start the simulation
@@ -162,6 +203,9 @@ export class SimulationEngine {
 
     // Start the main loop
     this.startMainLoop();
+
+    // Subscribe to commands (NCMD/DCMD) for all running nodes
+    this.subscribeToCommands(nodes);
   }
 
   /**
@@ -379,6 +423,145 @@ export class SimulationEngine {
   }
 
   /**
+   * Subscribe to NCMD/DCMD topics for all nodes
+   * Implements Sparkplug B command reception capability
+   */
+  private subscribeToCommands(nodes: Map<string, SimulatedEoN>): void {
+    if (!this.mqttClient) return;
+
+    console.log('\n📥 Subscribing to command topics...');
+
+    for (const [, node] of nodes) {
+      if (node.state !== 'running') continue;
+
+      // Subscribe to Node commands
+      const ncmdTopic = `spBv1.0/${node.config.groupId}/NCMD/${node.config.edgeNodeId}/#`;
+      this.mqttClient.subscribe(ncmdTopic, { qos: 0 }, (err) => {
+        if (err) {
+          console.error(`❌ Failed to subscribe to ${ncmdTopic}:`, err);
+        } else {
+          console.log(`✅ Subscribed to NCMD: ${ncmdTopic}`);
+        }
+      });
+
+      // Subscribe to Device commands for each device
+      if (node.devices && node.devices.length > 0) {
+        for (const device of node.devices) {
+          const dcmdTopic = `spBv1.0/${node.config.groupId}/DCMD/${node.config.edgeNodeId}/${device.deviceId}`;
+          this.mqttClient.subscribe(dcmdTopic, { qos: 0 }, (err) => {
+            if (err) {
+              console.error(`❌ Failed to subscribe to ${dcmdTopic}:`, err);
+            } else {
+              console.log(`✅ Subscribed to DCMD: ${dcmdTopic}`);
+            }
+          });
+        }
+      }
+    }
+
+    // Setup message handler
+    this.mqttClient.on('message', (topic, payload) => {
+      this.handleCommand(topic, payload);
+    });
+
+    console.log('✅ Command subscriptions complete\n');
+  }
+
+  /**
+   * Handle incoming NCMD/DCMD commands
+   * Processes commands and updates metrics accordingly
+   */
+  private handleCommand(topic: string, payload: Buffer): void {
+    try {
+      console.log(`\n📥 Received command on topic: ${topic}`);
+
+      // Decode the Sparkplug payload
+      const decoded = decodePayload(payload);
+      console.log(`   Decoded ${decoded.metrics?.length || 0} command metrics`);
+
+      // Parse topic to identify node/device
+      const topicParts = topic.split('/');
+      const messageType = topicParts[2]; // NCMD or DCMD
+      const edgeNodeId = topicParts[3];
+      const deviceId = topicParts[4]; // undefined for NCMD
+
+      if (!this.currentNodes) return;
+
+      // Find the target node
+      const targetNode = Array.from(this.currentNodes.values()).find(
+        (node) => node.config.edgeNodeId === edgeNodeId
+      );
+
+      if (!targetNode) {
+        console.warn(`⚠️  Node not found: ${edgeNodeId}`);
+        return;
+      }
+
+      // Process metrics from command
+      decoded.metrics?.forEach((metric) => {
+        console.log(`   📝 Command metric: ${metric.name} = ${metric.value}`);
+
+        // Check for rebirth command (handled separately)
+        if (metric.name === 'Node Control/Rebirth' && metric.value === true) {
+          console.log(`   🔄 Rebirth command received for ${edgeNodeId}`);
+          this.handleRebirth(targetNode);
+          return;
+        }
+
+        // For other commands, update the corresponding metric value
+        // (This is a simplified implementation - production would need more logic)
+        if (messageType === 'NCMD') {
+          // Update node metric
+          const nodeMetric = targetNode.metrics?.find((m) => m.name === metric.name);
+          if (nodeMetric) {
+            nodeMetric.value = metric.value as any;
+            console.log(`   ✅ Updated node metric: ${metric.name}`);
+          }
+        } else if (messageType === 'DCMD' && deviceId) {
+          // Update device metric
+          const device = targetNode.devices.find((d) => d.deviceId === deviceId);
+          if (device) {
+            const deviceMetric = device.metrics?.find((m) => m.name === metric.name);
+            if (deviceMetric) {
+              deviceMetric.value = metric.value as any;
+              console.log(`   ✅ Updated device metric: ${metric.name}`);
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error(`❌ Error handling command:`, error);
+    }
+  }
+
+  /**
+   * Handle rebirth request
+   * Re-publishes all BIRTH certificates with incremented bdSeq
+   */
+  private handleRebirth(node: SimulatedEoN): void {
+    console.log(`\n🔄 Executing REBIRTH for ${node.config.edgeNodeId}...`);
+
+    const nodeState = this.state.nodeStates.get(node.id);
+    if (!nodeState) return;
+
+    // Increment bdSeq (critical per Sparkplug B spec)
+    nodeState.bdSeq = BigInt(Number(nodeState.bdSeq) + 1);
+    console.log(`   New bdSeq: ${nodeState.bdSeq}`);
+
+    // Re-publish NBIRTH
+    this.publishNodeBirth(node);
+
+    // Re-publish all DBIRTHs
+    if (node.devices && node.devices.length > 0) {
+      for (const device of node.devices) {
+        this.publishDeviceBirth(node, device);
+      }
+    }
+
+    console.log(`✅ REBIRTH complete for ${node.config.edgeNodeId}\n`);
+  }
+
+  /**
    * Initialize state for a node
    */
   private initializeNodeState(_nodeId: string, node: SimulatedEoN): void {
@@ -419,6 +602,7 @@ export class SimulationEngine {
 
   /**
    * Publish NBIRTH message
+   * NOTE: Sparkplug B spec requires QoS 1 for BIRTH messages
    */
   private publishNodeBirth(node: SimulatedEoN): void {
     if (!this.mqttClient || !this.mqttClient.connected) {
@@ -447,7 +631,8 @@ export class SimulationEngine {
     };
     payload.metrics.unshift(bdSeqMetric);
 
-    this.publish(topic, payload, node.config.network.qos);
+    // CRITICAL: Sparkplug B spec REQUIRES QoS 1 for BIRTH messages
+    this.publish(topic, payload, 1);
   }
 
   /**
@@ -469,6 +654,7 @@ export class SimulationEngine {
 
   /**
    * Publish NDEATH message
+   * NOTE: Sparkplug B spec requires QoS 1 for DEATH messages
    */
   private publishNodeDeath(node: SimulatedEoN): void {
     if (!this.mqttClient || !this.mqttClient.connected) return;
@@ -491,7 +677,8 @@ export class SimulationEngine {
       seq: BigInt(this.incrementSeq(node.id)),
     };
 
-    this.publish(topic, payload, node.config.network.qos);
+    // CRITICAL: Sparkplug B spec REQUIRES QoS 1 for DEATH messages
+    this.publish(topic, payload, 1);
   }
 
   /**
@@ -524,6 +711,7 @@ export class SimulationEngine {
 
   /**
    * Publish DBIRTH message
+   * NOTE: Sparkplug B spec requires QoS 1 for BIRTH messages
    */
   private publishDeviceBirth(node: SimulatedEoN, device: any): void {
     if (!this.mqttClient || !this.mqttClient.connected) {
@@ -543,7 +731,8 @@ export class SimulationEngine {
       seq: BigInt(this.incrementDeviceSeq(device.id)),
     };
 
-    this.publish(topic, payload, node.config.network.qos);
+    // CRITICAL: Sparkplug B spec REQUIRES QoS 1 for BIRTH messages
+    this.publish(topic, payload, 1);
   }
 
   /**
@@ -565,6 +754,7 @@ export class SimulationEngine {
 
   /**
    * Publish DDEATH message
+   * NOTE: Sparkplug B spec requires QoS 1 for DEATH messages
    */
   private publishDeviceDeath(node: SimulatedEoN, device: any): void {
     if (!this.mqttClient || !this.mqttClient.connected) return;
@@ -580,7 +770,8 @@ export class SimulationEngine {
       seq: BigInt(this.incrementDeviceSeq(device.id)),
     };
 
-    this.publish(topic, payload, node.config.network.qos);
+    // CRITICAL: Sparkplug B spec REQUIRES QoS 1 for DEATH messages
+    this.publish(topic, payload, 1);
   }
 
   /**
