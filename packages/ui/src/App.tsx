@@ -7,6 +7,7 @@ import { useAuthStore } from './stores/authStore';
 import { Header } from './components/layout/Header';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { LoginPage } from './components/auth/LoginPage';
+import { initBrokerWebSocket, cleanupBrokerWebSocket } from './services/brokerWebSocket';
 
 // Components
 import { SCADAView } from './components/scada/SCADAView';
@@ -32,7 +33,7 @@ function App() {
     // Only connect to broker if authenticated
     if (!user) return;
 
-    // Connect to broker on mount using settings
+    // Connect to MQTT broker on mount using settings
     const brokerUrl = getBrokerUrl();
     connect(brokerUrl);
 
@@ -41,8 +42,13 @@ function App() {
       addLog(log);
     });
 
+    // Initialize Broker WebSocket for real-time monitoring
+    console.log('🔌 Initializing Broker WebSocket connection...');
+    initBrokerWebSocket();
+
     return () => {
       disconnect();
+      cleanupBrokerWebSocket();
     };
   }, [user, connect, disconnect, setOnMessage, addLog, getBrokerUrl]);
 

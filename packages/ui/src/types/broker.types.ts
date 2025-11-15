@@ -121,7 +121,7 @@ export interface Session {
   port: number;
   connectedAt: number;
   cleanSession: boolean;
-  sessionExpiry: number;
+  sessionExpiry?: number; // Optional - may not be set by all MQTT versions
   subscriptions: string[];
   stats: {
     bytesIn: number;
@@ -135,6 +135,7 @@ export interface Session {
   keepAlive: number;
   protocolVersion: number; // 3, 4, or 5 (MQTT 3.1, 3.1.1, or 5.0)
   isStale: boolean; // True if last activity > keepAlive * 1.5
+  willTopic?: string; // Last Will Topic (if set)
   willMessage?: {
     topic: string;
     payload: Uint8Array;
