@@ -746,12 +746,14 @@ export class SimulationEngine {
       console.log(`   🔧 Encoding payload...`);
 
       // Log payload structure for debugging (convert BigInt to string for display)
-      const payloadForLog = JSON.stringify(payload, (key, value) =>
+      const payloadForLog = JSON.stringify(payload, (_key, value) =>
         typeof value === 'bigint' ? value.toString() + 'n' : value
       );
       console.log(`   📦 Payload structure:`, payloadForLog);
 
-      const encodedPayload = encodePayload(payload);
+      // Cast to any to work around type incompatibility with @sparkplug/codec
+      // Our SparkplugPayload is compatible but TypeScript doesn't recognize it
+      const encodedPayload = encodePayload(payload as any);
       const payloadBuffer = Buffer.from(encodedPayload);
       console.log(`   ✅ Payload encoded (${payloadBuffer.length} bytes)`);
 
