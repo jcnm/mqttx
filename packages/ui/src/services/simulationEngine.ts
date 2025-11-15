@@ -15,6 +15,12 @@ import type {
 import { generateMetricValue, convertToDatatype, clampValue } from './dataGenerator';
 import { encodePayload, decodePayload } from '@sparkplug/codec';
 
+interface MetricHistoryEntry {
+  timestamp: bigint;
+  value: any;
+  datatype: number;
+}
+
 interface SimulationState {
   intervalId?: NodeJS.Timeout;
   startTime?: number;
@@ -24,6 +30,7 @@ interface SimulationState {
       bdSeq: bigint;
       seq: number;
       lastPublish: number;
+      birthSent: boolean; // Track if BIRTH has been sent (for alias optimization)
     }
   >;
   deviceStates: Map<
@@ -32,11 +39,16 @@ interface SimulationState {
       nodeId: string;
       seq: number;
       lastPublish: number;
+      birthSent: boolean; // Track if BIRTH has been sent (for alias optimization)
     }
   >;
   messageCount: number;
   lastMessageCount: number;
   lastStatsUpdate: number;
+  // Metric history tracking (Priority 3)
+  // Key format: "nodeId:metricName" or "deviceId:metricName"
+  metricHistory: Map<string, MetricHistoryEntry[]>;
+  maxHistoryEntries: number;
 }
 
 export class SimulationEngine {
@@ -46,6 +58,8 @@ export class SimulationEngine {
     messageCount: 0,
     lastMessageCount: 0,
     lastStatsUpdate: Date.now(),
+    metricHistory: new Map(),
+    maxHistoryEntries: 100, // Keep last 100 values per metric
   };
 
   private currentNodes: Map<string, SimulatedEoN> | null = null;
@@ -98,6 +112,135 @@ export class SimulationEngine {
   }
 
   /**
+   * Validate configuration against Sparkplug B specification
+   * Priority 3: Add validation warnings for spec violations
+   *
+   * @param nodes - Map of simulated nodes to validate
+   */
+  private validateConfiguration(nodes: Map<string, SimulatedEoN>): void {
+    console.log('\n🔍 Validating Sparkplug B configuration...\n');
+
+    let warningCount = 0;
+
+    for (const [, node] of nodes) {
+      const nodeId = node.config.edgeNodeId;
+
+      // Validate QoS settings
+      const qos = node.config.network.qos;
+      if (qos !== 0 && qos !== 1 && qos !== 2) {
+        console.warn(`⚠️  [${nodeId}] Invalid QoS value: ${qos}. Must be 0, 1, or 2.`);
+        warningCount++;
+      }
+
+      if (qos === 2) {
+        console.warn(`⚠️  [${nodeId}] QoS 2 is not recommended by Sparkplug B spec. Use QoS 0 or 1.`);
+        warningCount++;
+      }
+
+      if (qos !== 1) {
+        console.warn(
+          `⚠️  [${nodeId}] QoS is ${qos}. Sparkplug B spec REQUIRES QoS 1 for BIRTH/DEATH messages.\n` +
+          `   Note: This simulator enforces QoS 1 for BIRTH/DEATH regardless of this setting.`
+        );
+        warningCount++;
+      }
+
+      // Validate cleanSession setting
+      if (node.config.network.cleanSession === false) {
+        console.warn(
+          `⚠️  [${nodeId}] cleanSession is false. Sparkplug B spec RECOMMENDS cleanSession=true.\n` +
+          `   Persistent sessions can cause issues with bdSeq tracking.`
+        );
+        warningCount++;
+      }
+
+      // Validate metrics have aliases for optimization
+      const metricsWithoutAlias: string[] = [];
+      if (node.metrics) {
+        for (const metric of node.metrics) {
+          if (metric.alias === undefined && metric.name) {
+            metricsWithoutAlias.push(metric.name);
+          }
+        }
+      }
+
+      if (metricsWithoutAlias.length > 0) {
+        console.warn(
+          `⚠️  [${nodeId}] ${metricsWithoutAlias.length} node metrics missing alias (optimization opportunity):\n` +
+          `   ${metricsWithoutAlias.slice(0, 5).join(', ')}${metricsWithoutAlias.length > 5 ? '...' : ''}\n` +
+          `   Tip: Define aliases to reduce NDATA/DDATA payload size.`
+        );
+        warningCount++;
+      }
+
+      // Validate device metrics
+      if (node.devices) {
+        for (const device of node.devices) {
+          const deviceMetricsWithoutAlias: string[] = [];
+          if (device.metrics) {
+            for (const metric of device.metrics) {
+              if (metric.alias === undefined && metric.name) {
+                deviceMetricsWithoutAlias.push(metric.name);
+              }
+            }
+          }
+
+          if (deviceMetricsWithoutAlias.length > 0) {
+            console.warn(
+              `⚠️  [${nodeId}/${device.deviceId}] ${deviceMetricsWithoutAlias.length} device metrics missing alias:\n` +
+              `   ${deviceMetricsWithoutAlias.slice(0, 5).join(', ')}${deviceMetricsWithoutAlias.length > 5 ? '...' : ''}`
+            );
+            warningCount++;
+          }
+        }
+      }
+
+      // Validate metric datatypes match values
+      if (node.metrics) {
+        for (const metric of node.metrics) {
+          if (metric.value !== undefined && metric.value !== null) {
+            const valueType = typeof metric.value;
+            const expectedType = this.getExpectedTypeForDatatype(metric.datatype);
+
+            if (expectedType && valueType !== expectedType && valueType !== 'object') {
+              console.warn(
+                `⚠️  [${nodeId}] Metric "${metric.name}" has datatype ${metric.datatype} (expects ${expectedType}) but value is ${valueType}: ${metric.value}`
+              );
+              warningCount++;
+            }
+          }
+        }
+      }
+    }
+
+    if (warningCount === 0) {
+      console.log('✅ Configuration validation passed with no warnings.\n');
+    } else {
+      console.log(`⚠️  Configuration validation completed with ${warningCount} warning(s).\n`);
+    }
+  }
+
+  /**
+   * Get expected JavaScript type for a Sparkplug datatype
+   * Used for validation warnings
+   */
+  private getExpectedTypeForDatatype(datatype: number): string | null {
+    switch (datatype) {
+      case 1: case 2: case 3: case 5: case 6: case 7: // Int/UInt 8/16/32
+      case 9: case 10: // Float, Double
+        return 'number';
+      case 4: case 8: case 13: // Int64, UInt64, DateTime
+        return 'bigint';
+      case 11: // Boolean
+        return 'boolean';
+      case 12: case 14: // String, Text
+        return 'string';
+      default:
+        return null; // Complex types
+    }
+  }
+
+  /**
    * Start the simulation
    */
   start(
@@ -119,6 +262,9 @@ export class SimulationEngine {
     console.log('═══════════════════════════════════════════════════════════════');
     console.log('🚀 STARTING SIMULATION ENGINE');
     console.log('═══════════════════════════════════════════════════════════════');
+
+    // Priority 3: Validate configuration
+    this.validateConfiguration(nodes);
     console.log(`📡 MQTT Client Status:`);
     console.log(`   - Exists: ${this.mqttClient ? '✅ Yes' : '❌ No'}`);
     console.log(`   - Connected: ${this.mqttClient?.connected ? '✅ Yes' : '❌ No'}`);
@@ -570,6 +716,7 @@ export class SimulationEngine {
       bdSeq,
       seq: 0,
       lastPublish: Date.now(),
+      birthSent: false,
     });
   }
 
@@ -618,7 +765,8 @@ export class SimulationEngine {
     // Build strongly-typed Sparkplug payload
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
-      metrics: this.buildMetrics(node.metrics || [], 0),
+      // Priority 3: Pass isBirth=true and entityId for alias optimization & history
+      metrics: this.buildMetrics(node.metrics || [], 0, true, node.id),
       seq: BigInt(this.incrementSeq(node.id)),
     };
 
@@ -630,6 +778,9 @@ export class SimulationEngine {
       value: nodeState.bdSeq,
     };
     payload.metrics.unshift(bdSeqMetric);
+
+    // Mark BIRTH as sent (for alias optimization)
+    nodeState.birthSent = true;
 
     // CRITICAL: Sparkplug B spec REQUIRES QoS 1 for BIRTH messages
     this.publish(topic, payload, 1);
@@ -645,7 +796,8 @@ export class SimulationEngine {
 
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
-      metrics: this.buildMetrics(node.metrics || [], currentTime),
+      // Priority 3: Pass isBirth=false and entityId for alias optimization & history
+      metrics: this.buildMetrics(node.metrics || [], currentTime, false, node.id),
       seq: BigInt(this.incrementSeq(node.id)),
     };
 
@@ -706,6 +858,7 @@ export class SimulationEngine {
       nodeId,
       seq: 0,
       lastPublish: Date.now(),
+      birthSent: false,
     });
   }
 
@@ -727,9 +880,13 @@ export class SimulationEngine {
     // Build strongly-typed Sparkplug payload
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
-      metrics: this.buildMetrics(device.metrics || [], 0),
+      // Priority 3: Pass isBirth=true and entityId for alias optimization & history
+      metrics: this.buildMetrics(device.metrics || [], 0, true, device.id),
       seq: BigInt(this.incrementDeviceSeq(device.id)),
     };
+
+    // Mark BIRTH as sent (for alias optimization)
+    deviceState.birthSent = true;
 
     // CRITICAL: Sparkplug B spec REQUIRES QoS 1 for BIRTH messages
     this.publish(topic, payload, 1);
@@ -745,7 +902,8 @@ export class SimulationEngine {
 
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
-      metrics: this.buildMetrics(device.metrics || [], currentTime),
+      // Priority 3: Pass isBirth=false and entityId for alias optimization & history
+      metrics: this.buildMetrics(device.metrics || [], currentTime, false, device.id),
       seq: BigInt(this.incrementDeviceSeq(device.id)),
     };
 
@@ -949,12 +1107,81 @@ export class SimulationEngine {
   }
 
   /**
+   * Add metric value to history
+   * Priority 3: Metric history tracking
+   *
+   * @param entityId - Node or device ID
+   * @param metricName - Name of the metric
+   * @param value - Metric value
+   * @param datatype - Sparkplug datatype
+   */
+  private addToMetricHistory(
+    entityId: string,
+    metricName: string,
+    value: any,
+    datatype: number
+  ): void {
+    const historyKey = `${entityId}:${metricName}`;
+    const entry: MetricHistoryEntry = {
+      timestamp: BigInt(Date.now()),
+      value,
+      datatype,
+    };
+
+    let history = this.state.metricHistory.get(historyKey);
+    if (!history) {
+      history = [];
+      this.state.metricHistory.set(historyKey, history);
+    }
+
+    // Add new entry
+    history.push(entry);
+
+    // Keep only last N entries
+    if (history.length > this.state.maxHistoryEntries) {
+      history.shift(); // Remove oldest entry
+    }
+  }
+
+  /**
+   * Get metric history for analysis
+   * Priority 3: Metric history tracking
+   *
+   * @param entityId - Node or device ID
+   * @param metricName - Name of the metric
+   * @returns Array of historical values
+   */
+  public getMetricHistory(entityId: string, metricName: string): MetricHistoryEntry[] {
+    const historyKey = `${entityId}:${metricName}`;
+    return this.state.metricHistory.get(historyKey) || [];
+  }
+
+  /**
+   * Clear metric history
+   * Priority 3: Metric history tracking
+   */
+  public clearMetricHistory(): void {
+    this.state.metricHistory.clear();
+  }
+
+  /**
    * Build metrics array from definitions
    * Returns strongly-typed SparkplugMetric array
+   *
+   * Priority 3 Features:
+   * - Alias-only optimization: In DATA messages, use only alias (omit name) to reduce payload size
+   * - Metric history tracking: Track historical values for analysis
+   *
+   * @param metricDefs - Metric definitions to build from
+   * @param currentTime - Current simulation time
+   * @param isBirth - Whether this is a BIRTH message (affects alias optimization)
+   * @param entityId - Entity ID for history tracking (nodeId or deviceId)
    */
   private buildMetrics(
     metricDefs: MetricDefinition[],
-    currentTime: number
+    currentTime: number,
+    isBirth: boolean = false,
+    entityId?: string
   ): SparkplugMetric[] {
     return metricDefs.map((metricDef) => {
       let value: any;
@@ -985,19 +1212,42 @@ export class SimulationEngine {
         value = this.getDefaultValueForDatatype(metricDef.datatype);
       }
 
+      // Priority 3: Track metric history
+      if (entityId && metricDef.name) {
+        this.addToMetricHistory(entityId, metricDef.name, value, metricDef.datatype);
+      }
+
       // Build strongly-typed SparkplugMetric (Sparkplug B compliant)
       const metric: SparkplugMetric = {
-        name: metricDef.name,
         timestamp: BigInt(Date.now()),
         datatype: metricDef.datatype,
         value,
       };
 
-      // Add optional alias (must be BigInt)
-      if (metricDef.alias !== undefined) {
-        metric.alias = typeof metricDef.alias === 'bigint'
-          ? metricDef.alias
-          : BigInt(metricDef.alias);
+      // Priority 3: Alias optimization
+      // In BIRTH messages: include both name and alias
+      // In DATA messages: if alias exists, use only alias (omit name)
+      if (isBirth) {
+        // BIRTH: Always include name
+        metric.name = metricDef.name;
+        // Add optional alias (must be BigInt)
+        if (metricDef.alias !== undefined) {
+          metric.alias = typeof metricDef.alias === 'bigint'
+            ? metricDef.alias
+            : BigInt(metricDef.alias);
+        }
+      } else {
+        // DATA: Use alias-only optimization if alias is defined
+        if (metricDef.alias !== undefined) {
+          // Alias-only (no name) - reduces payload size per Sparkplug B spec
+          metric.alias = typeof metricDef.alias === 'bigint'
+            ? metricDef.alias
+            : BigInt(metricDef.alias);
+          // Note: name is intentionally omitted for optimization
+        } else {
+          // No alias defined, must include name
+          metric.name = metricDef.name;
+        }
       }
 
       // Add optional properties (convert to Sparkplug PropertySet)
