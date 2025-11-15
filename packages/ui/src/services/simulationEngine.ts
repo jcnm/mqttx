@@ -653,7 +653,10 @@ export class SimulationEngine {
       };
 
       if (metricDef.alias !== undefined) {
-        metric.alias = metricDef.alias;
+        // Convert alias to BigInt (Sparkplug requires UInt64)
+        metric.alias = typeof metricDef.alias === 'bigint'
+          ? metricDef.alias
+          : BigInt(metricDef.alias);
       }
 
       if (metricDef.properties) {
@@ -698,6 +701,13 @@ export class SimulationEngine {
     try {
       // Encode payload using Sparkplug B protobuf format
       console.log(`   🔧 Encoding payload...`);
+
+      // Log payload structure for debugging (convert BigInt to string for display)
+      const payloadForLog = JSON.stringify(payload, (key, value) =>
+        typeof value === 'bigint' ? value.toString() + 'n' : value
+      );
+      console.log(`   📦 Payload structure:`, payloadForLog);
+
       const encodedPayload = encodePayload(payload);
       const payloadBuffer = Buffer.from(encodedPayload);
       console.log(`   ✅ Payload encoded (${payloadBuffer.length} bytes)`);
