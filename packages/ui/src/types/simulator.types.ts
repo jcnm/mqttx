@@ -73,6 +73,35 @@ export interface MetricDefinition {
   logic?: DataGenerationLogic;
 }
 
+/**
+ * Sparkplug B Metric - Strongly typed for encoder
+ * All fields match the protobuf schema exactly
+ */
+export interface SparkplugMetric {
+  name: string;
+  timestamp: bigint;
+  datatype: number;
+  value: number | string | boolean | bigint | Uint8Array;
+  alias?: bigint; // MUST be bigint (UInt64)
+  properties?: {
+    engineeringUnits?: string;
+    description?: string;
+    [key: string]: any;
+  };
+}
+
+/**
+ * Sparkplug B Payload - Strongly typed for encoder
+ * Ensures all required fields are present and correctly typed
+ */
+export interface SparkplugPayload {
+  timestamp: bigint; // MUST be bigint
+  metrics: SparkplugMetric[];
+  seq: bigint; // MUST be bigint (0-255)
+  uuid?: string;
+  body?: Uint8Array;
+}
+
 export interface DataProductionConfig {
   frequency: number; // ms
   logic: DataGenerationLogic;

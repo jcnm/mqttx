@@ -4,7 +4,12 @@
  */
 
 import type { MqttClient } from 'mqtt';
-import type { SimulatedEoN, MetricDefinition } from '../types/simulator.types';
+import type {
+  SimulatedEoN,
+  MetricDefinition,
+  SparkplugMetric,
+  SparkplugPayload,
+} from '../types/simulator.types';
 import { generateMetricValue, convertToDatatype, clampValue } from './dataGenerator';
 import { encodePayload } from '@sparkplug/codec';
 
@@ -424,20 +429,21 @@ export class SimulationEngine {
 
     const topic = `spBv1.0/${node.config.groupId}/NBIRTH/${node.config.edgeNodeId}`;
 
-    // Build Sparkplug payload
-    const payload = {
+    // Build strongly-typed Sparkplug payload
+    const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
       metrics: this.buildMetrics(node.metrics || [], 0),
       seq: BigInt(this.incrementSeq(node.id)),
     };
 
-    // Add bdSeq to metrics
-    payload.metrics.unshift({
+    // Add bdSeq metric to the beginning
+    const bdSeqMetric: SparkplugMetric = {
       name: 'bdSeq',
       timestamp: BigInt(Date.now()),
       datatype: 8, // UInt64
       value: nodeState.bdSeq,
-    });
+    };
+    payload.metrics.unshift(bdSeqMetric);
 
     this.publish(topic, payload, node.config.network.qos);
   }
@@ -450,7 +456,7 @@ export class SimulationEngine {
 
     const topic = `spBv1.0/${node.config.groupId}/NDATA/${node.config.edgeNodeId}`;
 
-    const payload = {
+    const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
       metrics: this.buildMetrics(node.metrics || [], currentTime),
       seq: BigInt(this.incrementSeq(node.id)),
@@ -470,16 +476,16 @@ export class SimulationEngine {
 
     const topic = `spBv1.0/${node.config.groupId}/NDEATH/${node.config.edgeNodeId}`;
 
-    const payload = {
+    const bdSeqMetric: SparkplugMetric = {
+      name: 'bdSeq',
       timestamp: BigInt(Date.now()),
-      metrics: [
-        {
-          name: 'bdSeq',
-          timestamp: BigInt(Date.now()),
-          datatype: 8,
-          value: nodeState.bdSeq,
-        },
-      ],
+      datatype: 8, // UInt64
+      value: nodeState.bdSeq,
+    };
+
+    const payload: SparkplugPayload = {
+      timestamp: BigInt(Date.now()),
+      metrics: [bdSeqMetric],
       seq: BigInt(this.incrementSeq(node.id)),
     };
 
@@ -528,8 +534,8 @@ export class SimulationEngine {
 
     const topic = `spBv1.0/${node.config.groupId}/DBIRTH/${node.config.edgeNodeId}/${device.deviceId}`;
 
-    // Build Sparkplug payload
-    const payload = {
+    // Build strongly-typed Sparkplug payload
+    const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
       metrics: this.buildMetrics(device.metrics || [], 0),
       seq: BigInt(this.incrementDeviceSeq(device.id)),
@@ -546,7 +552,7 @@ export class SimulationEngine {
 
     const topic = `spBv1.0/${node.config.groupId}/DDATA/${node.config.edgeNodeId}/${device.deviceId}`;
 
-    const payload = {
+    const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
       metrics: this.buildMetrics(device.metrics || [], currentTime),
       seq: BigInt(this.incrementDeviceSeq(device.id)),
@@ -566,7 +572,7 @@ export class SimulationEngine {
 
     const topic = `spBv1.0/${node.config.groupId}/DDEATH/${node.config.edgeNodeId}/${device.deviceId}`;
 
-    const payload = {
+    const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
       metrics: [],
       seq: BigInt(this.incrementDeviceSeq(device.id)),
@@ -607,21 +613,12 @@ export class SimulationEngine {
 
   /**
    * Build metrics array from definitions
+   * Returns strongly-typed SparkplugMetric array
    */
   private buildMetrics(
     metricDefs: MetricDefinition[],
     currentTime: number
-  ): Array<{
-    name: string;
-    timestamp: bigint;
-    datatype: number;
-    value: any;
-    alias?: bigint;
-    properties?: {
-      engineeringUnits?: string;
-      description?: string;
-    };
-  }> {
+  ): SparkplugMetric[] {
     return metricDefs.map((metricDef) => {
       let value: any;
 
@@ -645,20 +642,22 @@ export class SimulationEngine {
         value = metricDef.value;
       }
 
-      const metric: any = {
+      // Build strongly-typed SparkplugMetric
+      const metric: SparkplugMetric = {
         name: metricDef.name,
         timestamp: BigInt(Date.now()),
         datatype: metricDef.datatype,
         value,
       };
 
+      // Add optional alias (must be BigInt)
       if (metricDef.alias !== undefined) {
-        // Convert alias to BigInt (Sparkplug requires UInt64)
         metric.alias = typeof metricDef.alias === 'bigint'
           ? metricDef.alias
           : BigInt(metricDef.alias);
       }
 
+      // Add optional properties
       if (metricDef.properties) {
         metric.properties = {};
         if (metricDef.properties.engineeringUnits) {
@@ -675,8 +674,11 @@ export class SimulationEngine {
 
   /**
    * Publish message to MQTT broker
+   * @param topic - MQTT topic
+   * @param payload - Strongly-typed Sparkplug payload
+   * @param qos - Quality of Service level
    */
-  private publish(topic: string, payload: any, qos: 0 | 1 | 2): void {
+  private publish(topic: string, payload: SparkplugPayload, qos: 0 | 1 | 2): void {
     console.log(`\n📤 Attempting to publish...`);
     console.log(`   Topic: ${topic}`);
     console.log(`   QoS: ${qos}`);
