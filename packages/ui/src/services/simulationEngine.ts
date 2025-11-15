@@ -79,7 +79,7 @@ export class SimulationEngine {
    */
   public static generateWillMessage(node: SimulatedEoN): {
     topic: string;
-    payload: Buffer;
+    payload: Uint8Array;
     qos: 1;
     retain: false;
   } {
@@ -105,7 +105,7 @@ export class SimulationEngine {
 
     return {
       topic,
-      payload: Buffer.from(encodedPayload),
+      payload: encodedPayload, // Uint8Array works in browser
       qos: 1, // REQUIRED by Sparkplug B spec
       retain: false, // MUST be false per spec
     };
@@ -617,7 +617,7 @@ export class SimulationEngine {
    * Handle incoming NCMD/DCMD commands
    * Processes commands and updates metrics accordingly
    */
-  private handleCommand(topic: string, payload: Buffer): void {
+  private handleCommand(topic: string, payload: Uint8Array): void {
     try {
       console.log(`\n📥 Received command on topic: ${topic}`);
 
