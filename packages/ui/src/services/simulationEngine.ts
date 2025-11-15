@@ -1304,8 +1304,8 @@ export class SimulationEngine {
       // Cast to any to work around type incompatibility with @sparkplug/codec
       // Our SparkplugPayload is compatible but TypeScript doesn't recognize it
       const encodedPayload = encodePayload(payload as any);
-      const payloadBuffer = Buffer.from(encodedPayload);
-      console.log(`   ✅ Payload encoded (${payloadBuffer.length} bytes)`);
+      // encodePayload returns Uint8Array which works in browser (no Buffer needed)
+      console.log(`   ✅ Payload encoded (${encodedPayload.length} bytes)`);
 
       // Extract message type from topic
       const topicParts = topic.split('/');
@@ -1314,7 +1314,8 @@ export class SimulationEngine {
 
       console.log(`   📨 Publishing ${msgType} with ${metricsCount} metrics...`);
 
-      this.mqttClient.publish(topic, payloadBuffer, { qos }, (error) => {
+      // Cast Uint8Array to Buffer for MQTT client (works at runtime in browser)
+      this.mqttClient.publish(topic, encodedPayload as any, { qos }, (error) => {
         if (error) {
           console.error(`❌ Failed to publish ${msgType}:`, error);
           console.error(`   Topic: ${topic}`);
