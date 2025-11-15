@@ -14,37 +14,34 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import { format } from 'date-fns';
+import { MessageDetailPopover } from '../../common/MessageDetailPopover';
 import type { BrokerLog } from '../../../types/broker.types';
 
 interface LinearViewProps {
   logs: BrokerLog[];
-  decodeSparkplug?: boolean;
 }
 
-// Helper to decode payload
-function decodePayload(payload: Uint8Array, decodeAsSparkplug: boolean) {
-  try {
-    const text = new TextDecoder().decode(payload);
-    if (decodeAsSparkplug) {
-      // Try to parse as JSON (for now, simulated messages are JSON)
-      try {
-        return JSON.parse(text);
-      } catch {
-        return text;
-      }
-    }
-    return text;
-  } catch {
-    return '<binary data>';
-  }
-}
-
-export function LinearView({ logs, decodeSparkplug = true }: LinearViewProps) {
+export function LinearView({ logs }: LinearViewProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'timestamp', desc: true }]);
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [selectedLog, setSelectedLog] = useState<BrokerLog | null>(null);
+  const [selectedMessageNumber, setSelectedMessageNumber] = useState<number | undefined>();
 
   const columns = useMemo<ColumnDef<BrokerLog>[]>(
     () => [
+      {
+        id: 'number',
+        header: '#',
+        cell: (info) => {
+          const index = info.row.index;
+          const messageNumber = logs.length - index;
+          return (
+            <span className="text-xs font-mono text-blue-400 font-semibold">
+              #{messageNumber}
+            </span>
+          );
+        },
+        size: 70,
+      },
       {
         accessorKey: 'timestamp',
         header: 'Timestamp',
@@ -168,31 +165,25 @@ export function LinearView({ logs, decodeSparkplug = true }: LinearViewProps) {
         id: 'actions',
         header: '',
         cell: (info) => {
-          const id = info.row.original.id;
-          const isExpanded = expandedRows.has(id);
+          const index = info.row.index;
+          const messageNumber = logs.length - index;
           return (
             <button
               onClick={() => {
-                setExpandedRows((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(id)) {
-                    next.delete(id);
-                  } else {
-                    next.add(id);
-                  }
-                  return next;
-                });
+                setSelectedLog(info.row.original);
+                setSelectedMessageNumber(messageNumber);
               }}
-              className="text-xs text-emerald-500 hover:text-emerald-400"
+              className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
+              title="Inspect message"
             >
-              {isExpanded ? '▼' : '▶'}
+              🔍
             </button>
           );
         },
         size: 50,
       },
     ],
-    [expandedRows]
+    [logs.length]
   );
 
   const table = useReactTable({
@@ -246,48 +237,15 @@ export function LinearView({ logs, decodeSparkplug = true }: LinearViewProps) {
             ))}
           </thead>
           <tbody className="divide-y divide-slate-800">
-            {table.getRowModel().rows.map((row) => {
-              const isExpanded = expandedRows.has(row.original.id);
-              return (
-                <>
-                  <tr key={row.id} className="hover:bg-slate-800/50 transition-colors">
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3" style={{ width: cell.column.getSize() }}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                  {isExpanded && row.original.payload && (
-                    <tr key={`${row.id}-expanded`}>
-                      <td colSpan={columns.length} className="px-4 py-3 bg-slate-800/30">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-slate-400">Payload:</span>
-                            <button
-                              onClick={() => {
-                                const text = new TextDecoder().decode(row.original.payload);
-                                navigator.clipboard.writeText(text);
-                              }}
-                              className="text-xs text-emerald-500 hover:text-emerald-400"
-                            >
-                              Copy
-                            </button>
-                          </div>
-                          <pre className="text-xs text-slate-300 bg-slate-900 rounded p-3 overflow-x-auto font-mono max-h-64 overflow-y-auto">
-                            {(() => {
-                              const decoded = decodePayload(row.original.payload, decodeSparkplug);
-                              return typeof decoded === 'object'
-                                ? JSON.stringify(decoded, null, 2)
-                                : decoded;
-                            })()}
-                          </pre>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              );
-            })}
+            {table.getRowModel().rows.map((row) => (
+              <tr key={row.id} className="hover:bg-slate-800/50 transition-colors">
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className="px-4 py-3" style={{ width: cell.column.getSize() }}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -336,6 +294,18 @@ export function LinearView({ logs, decodeSparkplug = true }: LinearViewProps) {
           </button>
         </div>
       </div>
+
+      {/* Message Detail Popover */}
+      {selectedLog && (
+        <MessageDetailPopover
+          log={selectedLog}
+          messageNumber={selectedMessageNumber}
+          onClose={() => {
+            setSelectedLog(null);
+            setSelectedMessageNumber(undefined);
+          }}
+        />
+      )}
     </div>
   );
 }
