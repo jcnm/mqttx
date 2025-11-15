@@ -21,6 +21,7 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
   const [activeTab, setActiveTab] = useState<TabType>('identity');
   const [showMetricEditor, setShowMetricEditor] = useState(false);
   const [editingMetric, setEditingMetric] = useState<MetricDefinition | undefined>();
+  const [editingDeviceIndex, setEditingDeviceIndex] = useState<number | null>(null); // Track which device is being edited
   const [panelWidth, setPanelWidth] = useState(384); // Default 384px (w-96)
   const [isResizing, setIsResizing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -109,33 +110,106 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
   const handleSaveMetric = (metric: MetricDefinition) => {
     if (!node) return;
 
-    const existingMetrics = node.metrics || [];
-    const metricIndex = existingMetrics.findIndex((m) => m.name === metric.name);
+    // Check if we're editing a device metric
+    if (editingDeviceIndex !== null) {
+      const updatedDevices = [...node.devices];
+      const device = updatedDevices[editingDeviceIndex];
 
-    let updatedMetrics: MetricDefinition[];
-    if (metricIndex >= 0) {
-      // Update existing
-      updatedMetrics = [...existingMetrics];
-      updatedMetrics[metricIndex] = metric;
+      const existingMetrics = device.metrics || [];
+      const metricIndex = existingMetrics.findIndex((m) => m.name === metric.name);
+
+      let updatedMetrics: MetricDefinition[];
+      if (metricIndex >= 0) {
+        // Update existing
+        updatedMetrics = [...existingMetrics];
+        updatedMetrics[metricIndex] = metric;
+      } else {
+        // Add new
+        updatedMetrics = [...existingMetrics, metric];
+      }
+
+      updatedDevices[editingDeviceIndex] = {
+        ...device,
+        metrics: updatedMetrics,
+      };
+
+      handleUpdate({ devices: updatedDevices });
     } else {
-      // Add new
-      updatedMetrics = [...existingMetrics, metric];
+      // Editing node metric
+      const existingMetrics = node.metrics || [];
+      const metricIndex = existingMetrics.findIndex((m) => m.name === metric.name);
+
+      let updatedMetrics: MetricDefinition[];
+      if (metricIndex >= 0) {
+        // Update existing
+        updatedMetrics = [...existingMetrics];
+        updatedMetrics[metricIndex] = metric;
+      } else {
+        // Add new
+        updatedMetrics = [...existingMetrics, metric];
+      }
+
+      handleUpdate({ ...node, metrics: updatedMetrics });
     }
 
-    handleUpdate({ ...node, metrics: updatedMetrics });
     setShowMetricEditor(false);
     setEditingMetric(undefined);
+    setEditingDeviceIndex(null);
   };
 
-  const handleDeleteMetric = (metricName: string) => {
+  const handleDeleteMetric = (metricName: string, deviceIndex?: number) => {
     if (!node) return;
-    const updatedMetrics = (node.metrics || []).filter((m) => m.name !== metricName);
-    handleUpdate({ ...node, metrics: updatedMetrics });
+
+    if (deviceIndex !== undefined) {
+      // Delete device metric
+      const updatedDevices = [...node.devices];
+      const device = updatedDevices[deviceIndex];
+      const updatedMetrics = (device.metrics || []).filter((m) => m.name !== metricName);
+
+      updatedDevices[deviceIndex] = {
+        ...device,
+        metrics: updatedMetrics,
+      };
+
+      handleUpdate({ devices: updatedDevices });
+    } else {
+      // Delete node metric
+      const updatedMetrics = (node.metrics || []).filter((m) => m.name !== metricName);
+      handleUpdate({ ...node, metrics: updatedMetrics });
+    }
   };
 
-  const handleEditMetric = (metric: MetricDefinition) => {
+  const handleEditMetric = (metric: MetricDefinition, deviceIndex?: number) => {
     setEditingMetric(metric);
+    setEditingDeviceIndex(deviceIndex !== undefined ? deviceIndex : null);
     setShowMetricEditor(true);
+  };
+
+  const handleAddDeviceMetric = (deviceIndex: number) => {
+    setEditingMetric(undefined);
+    setEditingDeviceIndex(deviceIndex);
+    setShowMetricEditor(true);
+  };
+
+  const handleAddDevice = () => {
+    if (!node) return;
+
+    const deviceNumber = node.devices.length + 1;
+    const newDevice = {
+      id: `device-${Date.now()}`,
+      deviceId: `Device${deviceNumber}`,
+      protocol: 'SparkplugB' as const,
+      metrics: [],
+      dataProduction: {
+        frequency: 1000,
+        logic: { type: 'sine' as const, params: {} },
+        enabled: true,
+      },
+      state: 'stopped' as const,
+    };
+
+    const updatedDevices = [...node.devices, newDevice];
+    handleUpdate({ devices: updatedDevices });
   };
 
   const tabs: { id: TabType; label: string }[] = [
@@ -266,75 +340,189 @@ export function ConfigPanel({ node: propsNode, onClose: propsOnClose, onUpdate: 
             {/* Devices Tab */}
             {activeTab === 'devices' && isEoN && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-semibold text-white">
-                    Devices ({node.devices?.length || 0})
-                  </h4>
-                  <p className="text-xs text-slate-400">
-                    Drag devices from the left panel to add
-                  </p>
-                </div>
-
-                {(node.devices || []).length === 0 ? (
-                  <div className="text-center py-8 text-slate-500 border-2 border-dashed border-slate-700 rounded-lg">
-                    <p className="text-lg mb-2">📟</p>
-                    <p>No devices attached</p>
-                    <p className="text-xs mt-1">
-                      Select this node and drag a device from the left panel
-                    </p>
+                {showMetricEditor && editingDeviceIndex !== null ? (
+                  /* Device Metric Editor */
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-semibold text-white">
+                        {editingMetric ? 'Edit' : 'Add'} Metric - {node.devices[editingDeviceIndex].deviceId}
+                      </h4>
+                      <button
+                        onClick={() => {
+                          setShowMetricEditor(false);
+                          setEditingMetric(undefined);
+                          setEditingDeviceIndex(null);
+                        }}
+                        className="text-slate-400 hover:text-white"
+                      >
+                        ← Back to Devices
+                      </button>
+                    </div>
+                    <MetricEditor
+                      metric={editingMetric}
+                      onSave={handleSaveMetric}
+                      onCancel={() => {
+                        setShowMetricEditor(false);
+                        setEditingMetric(undefined);
+                        setEditingDeviceIndex(null);
+                      }}
+                    />
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {(node.devices || []).map((device, index) => (
-                      <div
-                        key={device.id}
-                        className="bg-slate-800 rounded-lg p-3 border border-slate-700 hover:border-slate-600 transition-colors"
+                  /* Device List */
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-semibold text-white">
+                        Devices ({node.devices?.length || 0})
+                      </h4>
+                      <button
+                        onClick={handleAddDevice}
+                        className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
                       >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h5 className="text-sm font-medium text-white">
-                                {device.deviceId}
-                              </h5>
-                              <span className="px-2 py-0.5 bg-purple-900/50 text-purple-400 rounded text-xs">
-                                {device.protocol}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-400">
-                              {device.metrics?.length || 0} metrics • {device.dataProduction.frequency}ms
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => {
-                              const updatedDevices = node.devices.filter((_, i) => i !== index);
-                              handleUpdate({ devices: updatedDevices });
-                            }}
-                            className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        <div className="mt-2 pt-2 border-t border-slate-700">
-                          <p className="text-xs text-slate-500 mb-1">Metrics:</p>
-                          <div className="flex flex-wrap gap-1">
-                            {device.metrics?.slice(0, 6).map((metric) => (
-                              <span
-                                key={metric.name}
-                                className="px-1.5 py-0.5 bg-slate-900 text-slate-300 rounded text-xs"
-                              >
-                                {metric.name}
-                              </span>
-                            ))}
-                            {device.metrics && device.metrics.length > 6 && (
-                              <span className="px-1.5 py-0.5 bg-slate-900 text-slate-400 rounded text-xs">
-                                +{device.metrics.length - 6} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                        + Add Device
+                      </button>
+                    </div>
+
+                    {(node.devices || []).length === 0 ? (
+                      <div className="text-center py-8 text-slate-500 border-2 border-dashed border-slate-700 rounded-lg">
+                        <p className="text-lg mb-2">📟</p>
+                        <p>No devices attached</p>
+                        <p className="text-xs mt-1">
+                          Select this node and drag a device from the left panel
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {(node.devices || []).map((device, deviceIndex) => (
+                          <div
+                            key={device.id}
+                            className="bg-slate-800 rounded-lg p-3 border border-slate-700"
+                          >
+                            {/* Device Header */}
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <input
+                                    type="text"
+                                    value={device.deviceId}
+                                    onChange={(e) => {
+                                      const updatedDevices = [...node.devices];
+                                      updatedDevices[deviceIndex] = {
+                                        ...device,
+                                        deviceId: e.target.value,
+                                      };
+                                      handleUpdate({ devices: updatedDevices });
+                                    }}
+                                    className="px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white text-sm font-medium w-48"
+                                  />
+                                  <span className="px-2 py-0.5 bg-purple-900/50 text-purple-400 rounded text-xs">
+                                    {device.protocol}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <label className="text-xs text-slate-400">Frequency:</label>
+                                  <input
+                                    type="number"
+                                    value={device.dataProduction.frequency}
+                                    onChange={(e) => {
+                                      const updatedDevices = [...node.devices];
+                                      updatedDevices[deviceIndex] = {
+                                        ...device,
+                                        dataProduction: {
+                                          ...device.dataProduction,
+                                          frequency: parseInt(e.target.value) || 1000,
+                                        },
+                                      };
+                                      handleUpdate({ devices: updatedDevices });
+                                    }}
+                                    className="w-20 px-2 py-0.5 bg-slate-900 border border-slate-600 rounded text-white text-xs"
+                                  />
+                                  <span className="text-xs text-slate-400">ms</span>
+                                  <span className="text-xs text-slate-500">•</span>
+                                  <label className="flex items-center gap-1 text-xs text-slate-400">
+                                    <input
+                                      type="checkbox"
+                                      checked={device.dataProduction.enabled !== false}
+                                      onChange={(e) => {
+                                        const updatedDevices = [...node.devices];
+                                        updatedDevices[deviceIndex] = {
+                                          ...device,
+                                          dataProduction: {
+                                            ...device.dataProduction,
+                                            enabled: e.target.checked,
+                                          },
+                                        };
+                                        handleUpdate({ devices: updatedDevices });
+                                      }}
+                                      className="w-3 h-3"
+                                    />
+                                    Enabled
+                                  </label>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  const updatedDevices = node.devices.filter((_, i) => i !== deviceIndex);
+                                  handleUpdate({ devices: updatedDevices });
+                                }}
+                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                              >
+                                Remove
+                              </button>
+                            </div>
+
+                            {/* Device Metrics */}
+                            <div className="mt-2 pt-2 border-t border-slate-700">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-medium text-slate-300">Metrics:</p>
+                                <button
+                                  onClick={() => handleAddDeviceMetric(deviceIndex)}
+                                  className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                                >
+                                  + Add Metric
+                                </button>
+                              </div>
+
+                              {(device.metrics || []).length === 0 ? (
+                                <p className="text-xs text-slate-500 italic py-2">No metrics defined</p>
+                              ) : (
+                                <div className="space-y-1">
+                                  {device.metrics.map((metric) => (
+                                    <div
+                                      key={metric.name}
+                                      className="flex items-center justify-between bg-slate-900 rounded px-2 py-1.5"
+                                    >
+                                      <div className="flex-1">
+                                        <span className="text-xs font-medium text-white">{metric.name}</span>
+                                        <span className="text-xs text-slate-400 ml-2">
+                                          {metric.logic?.type || 'static'}
+                                          {metric.properties?.engineeringUnits && ` • ${metric.properties.engineeringUnits}`}
+                                        </span>
+                                      </div>
+                                      <div className="flex gap-1">
+                                        <button
+                                          onClick={() => handleEditMetric(metric, deviceIndex)}
+                                          className="px-1.5 py-0.5 text-xs bg-slate-700 text-white rounded hover:bg-slate-600"
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteMetric(metric.name, deviceIndex)}
+                                          className="px-1.5 py-0.5 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                        >
+                                          Del
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
