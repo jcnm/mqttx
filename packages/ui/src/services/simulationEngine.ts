@@ -612,6 +612,41 @@ export class SimulationEngine {
   }
 
   /**
+   * Get default value for a Sparkplug datatype
+   * Used when metric value is null/undefined
+   */
+  private getDefaultValueForDatatype(datatype: number): any {
+    switch (datatype) {
+      case 1: // Int8
+      case 2: // Int16
+      case 3: // Int32
+      case 5: // UInt8
+      case 6: // UInt16
+      case 7: // UInt32
+        return 0;
+      case 4: // Int64
+      case 8: // UInt64
+      case 9: // DateTime
+        return BigInt(0);
+      case 10: // Float
+      case 11: // Double
+        return 0.0;
+      case 12: // Boolean
+        return false;
+      case 13: // String
+      case 14: // Text
+        return '';
+      case 15: // UUID
+        return '00000000-0000-0000-0000-000000000000';
+      case 16: // Bytes
+        return new Uint8Array(0);
+      default:
+        console.warn(`⚠️  Unknown datatype ${datatype}, defaulting to 0`);
+        return 0;
+    }
+  }
+
+  /**
    * Build metrics array from definitions
    * Returns strongly-typed SparkplugMetric array
    */
@@ -640,6 +675,12 @@ export class SimulationEngine {
         value = convertToDatatype(clampedValue, metricDef.datatype);
       } else {
         value = metricDef.value;
+      }
+
+      // CRITICAL: Ensure value is never null/undefined (encoder will fail)
+      if (value === null || value === undefined) {
+        console.warn(`⚠️  Metric "${metricDef.name}" has null/undefined value, using default for datatype ${metricDef.datatype}`);
+        value = this.getDefaultValueForDatatype(metricDef.datatype);
       }
 
       // Build strongly-typed SparkplugMetric
