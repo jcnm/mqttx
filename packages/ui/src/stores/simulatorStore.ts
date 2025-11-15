@@ -403,6 +403,9 @@ export const useSimulatorStore = create<SimulatorState>()(
           state.nodes.set(id, { ...node, state: 'stopped' });
         }
         state.stats.runningNodes = 0;
+        // Reset counters on stop
+        state.stats.messagesPublished = 0;
+        state.stats.messagesPerSecond = 0;
         state.stats.uptime = 0;
       }),
 

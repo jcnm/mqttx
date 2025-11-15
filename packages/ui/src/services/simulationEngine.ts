@@ -58,14 +58,26 @@ export class SimulationEngine {
     }) => void
   ): void {
     if (this.state.intervalId) {
-      console.warn('⚠️  Simulation already running');
-      return;
+      console.warn('⚠️  Simulation already running - stopping first');
+      this.stop(nodes);
     }
 
-    console.log('🚀 Starting simulation engine...');
-    console.log(`   MQTT Client Connected: ${this.mqttClient?.connected ? '✅ Yes' : '❌ No'}`);
+    console.log('\n🚀 Starting simulation engine...');
+    console.log(`   MQTT Client: ${this.mqttClient ? '✅ Created' : '❌ null'}`);
+    console.log(`   MQTT Connected: ${this.mqttClient?.connected ? '✅ Yes' : '❌ No'}`);
     console.log(`   Total Nodes: ${nodes.size}`);
     console.log(`   Speed Multiplier: ${this.speedMultiplier}x`);
+
+    // Debug node states
+    let runningCount = 0;
+    let stoppedCount = 0;
+    let pausedCount = 0;
+    for (const [, node] of nodes) {
+      if (node.state === 'running') runningCount++;
+      else if (node.state === 'stopped') stoppedCount++;
+      else if (node.state === 'paused') pausedCount++;
+    }
+    console.log(`   Node States: ${runningCount} running, ${stoppedCount} stopped, ${pausedCount} paused`);
 
     this.state.startTime = Date.now();
     this.state.messageCount = 0;
@@ -185,6 +197,27 @@ export class SimulationEngine {
    */
   setSpeed(speed: number): void {
     this.speedMultiplier = speed;
+  }
+
+  /**
+   * Reset simulation state completely
+   */
+  reset(): void {
+    console.log('🔄 Resetting simulation engine...');
+
+    if (this.state.intervalId) {
+      clearInterval(this.state.intervalId);
+      this.state.intervalId = undefined;
+    }
+
+    this.state.startTime = undefined;
+    this.state.messageCount = 0;
+    this.state.lastMessageCount = 0;
+    this.state.lastStatsUpdate = Date.now();
+    this.state.nodeStates.clear();
+    this.state.deviceStates.clear();
+
+    console.log('✅ Simulation engine reset complete\n');
   }
 
   /**

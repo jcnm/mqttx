@@ -35,6 +35,7 @@ export function PlantSimulatorNew() {
     setFlowNodes,
     isRunning,
     speed,
+    stats,
     addNode,
     updateNode,
     updateStats,
@@ -50,6 +51,7 @@ export function PlantSimulatorNew() {
   const [reactFlowEdges, setReactFlowEdges, onEdgesChange] = useEdgesState([]);
 
   const simulationEngineRef = useRef<ReturnType<typeof createSimulationEngine> | null>(null);
+  const prevStatsRef = useRef(stats);
 
   // Initialize simulation engine
   useEffect(() => {
@@ -65,20 +67,45 @@ export function PlantSimulatorNew() {
     }
   }, [speed]);
 
+  // Detect reset and clean engine state
+  useEffect(() => {
+    const prevStats = prevStatsRef.current;
+    const currentStats = stats;
+
+    // Detect if reset was called (all counters went to 0 from non-zero)
+    const wasReset =
+      prevStats.messagesPublished > 0 &&
+      currentStats.messagesPublished === 0 &&
+      currentStats.uptime === 0;
+
+    if (wasReset && simulationEngineRef.current) {
+      console.log('🔄 Reset detected - resetting simulation engine');
+      simulationEngineRef.current.reset();
+    }
+
+    prevStatsRef.current = currentStats;
+  }, [stats]);
+
   // Start/stop simulation
   useEffect(() => {
-    if (!simulationEngineRef.current) return;
+    if (!simulationEngineRef.current) {
+      console.warn('⚠️  Simulation engine not initialized');
+      return;
+    }
 
     if (isRunning) {
+      console.log('▶️  isRunning changed to true - starting simulation');
       simulationEngineRef.current.start(storeNodes, (engineStats) => {
         updateStats(engineStats);
       });
     } else {
+      console.log('⏸️  isRunning changed to false - stopping simulation');
       simulationEngineRef.current.stop(storeNodes);
     }
 
     return () => {
-      if (simulationEngineRef.current) {
+      if (simulationEngineRef.current && isRunning) {
+        console.log('🧹 Cleanup - stopping simulation');
         simulationEngineRef.current.stop(storeNodes);
       }
     };
