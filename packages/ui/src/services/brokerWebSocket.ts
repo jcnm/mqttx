@@ -4,7 +4,7 @@
  */
 
 import { useBrokerStore } from '../stores/brokerStore';
-import type { BrokerLog, Session, BrokerStats } from '../types/broker.types';
+import type { BrokerLog, Session } from '../types/broker.types';
 
 export class BrokerWebSocketService {
   private ws: WebSocket | null = null;
