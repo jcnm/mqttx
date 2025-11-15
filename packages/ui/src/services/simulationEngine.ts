@@ -333,27 +333,6 @@ export class SimulationEngine {
   }
 
   /**
-   * Reset simulation state completely
-   */
-  reset(): void {
-    console.log('🔄 Resetting simulation engine...');
-
-    if (this.state.intervalId) {
-      clearInterval(this.state.intervalId);
-      this.state.intervalId = undefined;
-    }
-
-    this.state.startTime = undefined;
-    this.state.messageCount = 0;
-    this.state.lastMessageCount = 0;
-    this.state.lastStatsUpdate = Date.now();
-    this.state.nodeStates.clear();
-    this.state.deviceStates.clear();
-
-    console.log('✅ Simulation engine reset complete\n');
-  }
-
-  /**
    * Initialize state for a node
    */
   private initializeNodeState(_nodeId: string, node: SimulatedEoN): void {
