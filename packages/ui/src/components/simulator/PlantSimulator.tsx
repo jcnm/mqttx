@@ -55,11 +55,11 @@ export function PlantSimulator() {
     }
 
     return () => {
-      if (simulationEngineRef.current) {
+      if (simulationEngineRef.current && isRunning) {
         simulationEngineRef.current.stop(nodes);
       }
     };
-  }, [isRunning]);
+  }, [isRunning, nodes, updateStats]);
 
   // Sync nodes to ReactFlow
   useEffect(() => {
