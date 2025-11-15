@@ -1,4 +1,4 @@
-// Sparkplug B Codec - Main Export
+// Sparkplug B Codec - Main Export (Node.js version)
 
 export * from './types.js';
 export * from './encoder.js';

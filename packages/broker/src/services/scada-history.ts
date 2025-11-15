@@ -1,208 +1,278 @@
 /**
  * SCADA History Service
- * Stores and retrieves metric history in Redis
+ * Manages metrics history storage in Redis
+ * Sparkplug B Compliant - stores timestamped metric values
  */
 
-import { Redis } from 'ioredis';
+import type { Redis } from 'ioredis';
+import type { Metric } from '@sparkplug/codec';
 
-export interface MetricHistoryPoint {
-  timestamp: number;
-  value: number | string | boolean;
+export interface MetricHistoryEntry {
+  timestamp: string; // ISO 8601
+  value: number | string | boolean | bigint;
   datatype: number;
+  quality?: number; // Sparkplug quality code
 }
 
 export interface MetricHistoryQuery {
-  groupId: string;
-  edgeNodeId: string;
-  deviceId?: string;
+  nodeKey: string; // groupId/edgeNodeId
   metricName: string;
-  start?: number; // Unix timestamp ms
-  end?: number;   // Unix timestamp ms
+  deviceId?: string;
+  startTime?: Date;
+  endTime?: Date;
   limit?: number;
 }
 
 export class SCADAHistoryService {
-  private redis: Redis;
-  private readonly TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+  private redis: Redis | null;
+  private keyPrefix = 'scada:history:';
+  private maxPointsPerMetric = 10000; // Per metric history limit
 
-  constructor(redis: Redis) {
+  constructor(redis: Redis | null) {
     this.redis = redis;
   }
 
   /**
-   * Save a metric value to history
+   * Store a metric value in history
+   * Key format: scada:history:{groupId}/{edgeNodeId}:{metricName}
+   * or:         scada:history:{groupId}/{edgeNodeId}/{deviceId}:{metricName}
    */
-  async saveMetric(
+  async storeMetricValue(
     groupId: string,
     edgeNodeId: string,
     metricName: string,
-    value: number | string | boolean,
+    value: number | string | boolean | bigint,
     datatype: number,
-    deviceId?: string
+    timestamp: bigint,
+    deviceId?: string,
+    quality?: number
   ): Promise<void> {
-    const key = this.getHistoryKey(groupId, edgeNodeId, metricName, deviceId);
-    const timestamp = Date.now();
+    if (!this.redis) return;
 
-    const point: MetricHistoryPoint = {
-      timestamp,
-      value,
+    const nodeKey = deviceId
+      ? `${groupId}/${edgeNodeId}/${deviceId}`
+      : `${groupId}/${edgeNodeId}`;
+    const key = `${this.keyPrefix}${nodeKey}:${metricName}`;
+
+    // Convert bigint to string for storage
+    const valueStr = typeof value === 'bigint' ? value.toString() : value;
+
+    const entry: MetricHistoryEntry = {
+      timestamp: new Date(Number(timestamp)).toISOString(),
+      value: valueStr,
       datatype,
+      quality,
     };
 
-    // Store in Redis sorted set with timestamp as score
-    await this.redis.zadd(key, timestamp, JSON.stringify(point));
+    try {
+      // Use Redis Sorted Set with timestamp as score
+      const score = Number(timestamp);
+      await this.redis.zadd(key, score, JSON.stringify(entry));
 
-    // Set TTL to auto-expire old data
-    await this.redis.expire(key, this.TTL_SECONDS);
+      // Trim to max points (keep most recent)
+      const count = await this.redis.zcard(key);
+      if (count > this.maxPointsPerMetric) {
+        const removeCount = count - this.maxPointsPerMetric;
+        await this.redis.zremrangebyrank(key, 0, removeCount - 1);
+      }
+
+      // Set TTL on key (30 days)
+      await this.redis.expire(key, 30 * 24 * 60 * 60);
+    } catch (error) {
+      console.error('Failed to store metric history:', error);
+    }
   }
 
   /**
    * Get metric history
    */
-  async getHistory(query: MetricHistoryQuery): Promise<MetricHistoryPoint[]> {
-    const { groupId, edgeNodeId, metricName, deviceId, start, end, limit } = query;
-    const key = this.getHistoryKey(groupId, edgeNodeId, metricName, deviceId);
+  async getMetricHistory(query: MetricHistoryQuery): Promise<MetricHistoryEntry[]> {
+    if (!this.redis) return [];
 
-    const now = Date.now();
-    const startTime = start ?? now - 60 * 60 * 1000; // Default: last hour
-    const endTime = end ?? now;
+    const key = query.deviceId
+      ? `${this.keyPrefix}${query.nodeKey}/${query.deviceId}:${query.metricName}`
+      : `${this.keyPrefix}${query.nodeKey}:${query.metricName}`;
 
-    // Get data from sorted set
-    const results = await this.redis.zrangebyscore(
-      key,
-      startTime,
-      endTime,
-      'LIMIT',
-      0,
-      limit ?? 1000
-    );
+    try {
+      const startScore = query.startTime ? query.startTime.getTime() : '-inf';
+      const endScore = query.endTime ? query.endTime.getTime() : '+inf';
 
-    return results.map((item) => JSON.parse(item));
+      // Get from sorted set by score range
+      const results = await this.redis.zrangebyscore(
+        key,
+        startScore,
+        endScore,
+        'LIMIT',
+        0,
+        query.limit || 1000
+      );
+
+      return results.map((r) => JSON.parse(r) as MetricHistoryEntry);
+    } catch (error) {
+      console.error('Failed to get metric history:', error);
+      return [];
+    }
   }
 
   /**
    * Get latest value for a metric
    */
-  async getLatest(
+  async getLatestValue(
     groupId: string,
     edgeNodeId: string,
     metricName: string,
     deviceId?: string
-  ): Promise<MetricHistoryPoint | null> {
-    const key = this.getHistoryKey(groupId, edgeNodeId, metricName, deviceId);
+  ): Promise<MetricHistoryEntry | null> {
+    if (!this.redis) return null;
 
-    // Get most recent entry
-    const results = await this.redis.zrevrange(key, 0, 0);
+    const nodeKey = deviceId
+      ? `${groupId}/${edgeNodeId}/${deviceId}`
+      : `${groupId}/${edgeNodeId}`;
+    const key = `${this.keyPrefix}${nodeKey}:${metricName}`;
 
-    if (results.length === 0) {
+    try {
+      // Get most recent entry
+      const results = await this.redis.zrevrange(key, 0, 0);
+      if (results.length === 0) return null;
+
+      return JSON.parse(results[0]) as MetricHistoryEntry;
+    } catch (error) {
+      console.error('Failed to get latest value:', error);
       return null;
     }
-
-    return JSON.parse(results[0]);
   }
 
   /**
    * Get all metrics for a node
    */
   async getNodeMetrics(groupId: string, edgeNodeId: string): Promise<string[]> {
-    const pattern = `scada:history:${groupId}:${edgeNodeId}:*`;
-    const keys = await this.redis.keys(pattern);
+    if (!this.redis) return [];
 
-    // Extract metric names from keys
-    return keys.map((key) => {
-      const parts = key.split(':');
-      return parts[parts.length - 1];
-    });
-  }
+    const pattern = `${this.keyPrefix}${groupId}/${edgeNodeId}:*`;
 
-  /**
-   * Delete old data (cleanup)
-   */
-  async deleteOldData(olderThanMs: number): Promise<number> {
-    const pattern = 'scada:history:*';
-    const keys = await this.redis.keys(pattern);
-    const cutoffTime = Date.now() - olderThanMs;
-
-    let deletedCount = 0;
-
-    for (const key of keys) {
-      // Remove entries older than cutoff
-      const removed = await this.redis.zremrangebyscore(key, 0, cutoffTime);
-      deletedCount += removed;
-
-      // Delete key if empty
-      const count = await this.redis.zcard(key);
-      if (count === 0) {
-        await this.redis.del(key);
-      }
+    try {
+      const keys = await this.redis.keys(pattern);
+      return keys.map((key) => {
+        const parts = key.split(':');
+        return parts[parts.length - 1];
+      });
+    } catch (error) {
+      console.error('Failed to get node metrics:', error);
+      return [];
     }
-
-    return deletedCount;
   }
 
   /**
-   * Get statistics for a metric (min, max, avg)
+   * Delete history for a metric
    */
-  async getStats(
+  async deleteMetricHistory(
     groupId: string,
     edgeNodeId: string,
     metricName: string,
-    start?: number,
-    end?: number,
     deviceId?: string
-  ): Promise<{
-    min: number;
-    max: number;
-    avg: number;
+  ): Promise<void> {
+    if (!this.redis) return;
+
+    const nodeKey = deviceId
+      ? `${groupId}/${edgeNodeId}/${deviceId}`
+      : `${groupId}/${edgeNodeId}`;
+    const key = `${this.keyPrefix}${nodeKey}:${metricName}`;
+
+    try {
+      await this.redis.del(key);
+    } catch (error) {
+      console.error('Failed to delete metric history:', error);
+    }
+  }
+
+  /**
+   * Get statistics for a metric
+   */
+  async getMetricStats(query: MetricHistoryQuery): Promise<{
     count: number;
-  } | null> {
-    const history = await this.getHistory({
-      groupId,
-      edgeNodeId,
-      metricName,
-      deviceId,
-      start,
-      end,
-    });
+    min?: number;
+    max?: number;
+    avg?: number;
+    latest?: MetricHistoryEntry;
+  }> {
+    const history = await this.getMetricHistory(query);
 
     if (history.length === 0) {
-      return null;
+      return { count: 0 };
     }
 
-    // Filter numeric values only
     const numericValues = history
-      .map((p) => p.value)
-      .filter((v): v is number => typeof v === 'number');
+      .map((e) => Number(e.value))
+      .filter((v) => !isNaN(v));
 
     if (numericValues.length === 0) {
-      return null;
+      return { count: history.length, latest: history[history.length - 1] };
     }
 
-    const min = Math.min(...numericValues);
-    const max = Math.max(...numericValues);
-    const sum = numericValues.reduce((a, b) => a + b, 0);
-    const avg = sum / numericValues.length;
-
     return {
-      min,
-      max,
-      avg,
-      count: numericValues.length,
+      count: history.length,
+      min: Math.min(...numericValues),
+      max: Math.max(...numericValues),
+      avg: numericValues.reduce((a, b) => a + b, 0) / numericValues.length,
+      latest: history[history.length - 1],
     };
   }
 
   /**
-   * Generate history key
+   * Store NBIRTH/DBIRTH metrics
    */
-  private getHistoryKey(
+  async storeBirthMetrics(
     groupId: string,
     edgeNodeId: string,
-    metricName: string,
+    metrics: Metric[],
+    timestamp: bigint,
     deviceId?: string
-  ): string {
-    if (deviceId) {
-      return `scada:history:${groupId}:${edgeNodeId}:${deviceId}:${metricName}`;
-    }
-    return `scada:history:${groupId}:${edgeNodeId}:${metricName}`;
+  ): Promise<void> {
+    if (!metrics) return;
+
+    const promises = metrics.map((metric) => {
+      if (!metric.name || metric.name === 'bdSeq') return Promise.resolve();
+
+      // Handle complex types (Uint8Array, DataSet, Template, PropertySet)
+      let value: number | string | boolean | bigint;
+      if (typeof metric.value === 'number' || typeof metric.value === 'string' ||
+          typeof metric.value === 'boolean' || typeof metric.value === 'bigint') {
+        value = metric.value;
+      } else if (metric.value instanceof Uint8Array) {
+        // Convert Uint8Array to hex string
+        value = Buffer.from(metric.value).toString('hex');
+      } else if (metric.value !== null && metric.value !== undefined) {
+        // Convert complex objects to JSON string
+        value = JSON.stringify(metric.value);
+      } else {
+        // Skip null/undefined values
+        return Promise.resolve();
+      }
+
+      return this.storeMetricValue(
+        groupId,
+        edgeNodeId,
+        metric.name,
+        value,
+        metric.datatype ?? 0,
+        metric.timestamp || timestamp,
+        deviceId
+      );
+    });
+
+    await Promise.all(promises);
+  }
+
+  /**
+   * Store NDATA/DDATA metrics
+   */
+  async storeDataMetrics(
+    groupId: string,
+    edgeNodeId: string,
+    metrics: Metric[],
+    timestamp: bigint,
+    deviceId?: string
+  ): Promise<void> {
+    return this.storeBirthMetrics(groupId, edgeNodeId, metrics, timestamp, deviceId);
   }
 }

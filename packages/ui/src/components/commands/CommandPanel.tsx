@@ -11,6 +11,7 @@ import { encodePayload } from '@sparkplug/codec';
 import { ConnectionConfigPanel, type MQTTConnectionConfig } from './ConnectionConfigPanel';
 import { TargetSelector, type CommandTarget } from './TargetSelector';
 import { SparkplugCommandBuilder, type SparkplugCommand } from './SparkplugCommandBuilder';
+import { commandTracker } from '../../services/commandTracker';
 
 type Tab = 'send' | 'history' | 'scheduled';
 
@@ -139,7 +140,7 @@ export function CommandPanel() {
 
     try {
       let topic: string;
-      let payload: Buffer;
+      let payload: Uint8Array;
 
       if (target.protocol === 'SparkplugB') {
         // Sparkplug B Protocol
@@ -180,8 +181,8 @@ export function CommandPanel() {
           ];
         }
 
-        // Encode with @sparkplug/codec
-        payload = Buffer.from(encodePayload(sparkplugPayload));
+        // Encode with @sparkplug/codec - already returns Uint8Array
+        payload = encodePayload(sparkplugPayload);
       } else {
         // Raw MQTT v5
         topic = `${target.namespace || 'custom'}/${target.groupId}/${target.edgeNodeId}`;
@@ -199,14 +200,17 @@ export function CommandPanel() {
             datatype: m.datatype,
           })),
         };
-        payload = Buffer.from(JSON.stringify(rawPayload));
+        // Convert JSON string to Uint8Array for browser compatibility
+        const encoder = new TextEncoder();
+        payload = encoder.encode(JSON.stringify(rawPayload));
       }
 
       // Publish message
       await new Promise<void>((resolve, reject) => {
+        // MQTT.js accepts Uint8Array at runtime, cast for TypeScript
         mqttClient.publish(
           topic,
-          payload,
+          payload as any,
           {
             qos: connectionConfig.qos,
             retain: false,
@@ -222,7 +226,7 @@ export function CommandPanel() {
       });
 
       // Add to command history
-      createCommand({
+      const commandId = createCommand({
         type: command.messageType as any, // Cast for now - will match CommandType
         target: {
           groupId: target.groupId || 'Unknown',
@@ -244,6 +248,22 @@ export function CommandPanel() {
           type: 'immediate',
         },
       });
+
+      // Register command for ACK tracking (NCMD/DCMD only)
+      if (command.messageType === 'NCMD' || command.messageType === 'DCMD') {
+        commandTracker.registerCommand(commandId, {
+          id: commandId,
+          type: command.messageType,
+          target: {
+            groupId: target.groupId || 'Unknown',
+            edgeNodeId: target.edgeNodeId || 'Unknown',
+            deviceId: target.deviceId || target.deviceIdNew,
+          },
+          metrics: command.metrics.map(m => m.name || 'unnamed'),
+          sentAt: Date.now(),
+          timeout: 30000, // 30 seconds
+        });
+      }
 
       setSendSuccess(`✅ Command sent successfully on topic: ${topic}`);
       setIsSending(false);

@@ -3,7 +3,8 @@
  * Real-time monitoring of Edge of Network nodes and devices
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { Toaster } from 'react-hot-toast';
 import { useSCADAStore } from '../../stores/scadaStore';
 import { useMQTTStore } from '../../stores/mqttStore';
 import { GridView } from './GridView';
@@ -11,18 +12,27 @@ import { TreeView } from './TreeView';
 import { DetailPanel } from './DetailPanel';
 import { FilterPanel } from './FilterPanel';
 import { StateIndicator } from './StateIndicator';
+import { AlarmPanel } from './AlarmPanel';
 import { processSparkplugMessage, calculateMessagesPerSecond } from '../../services/sparkplugProcessor';
+import { useAlarmMonitoring } from '../../hooks/useAlarmMonitoring';
 
 export function SCADAView() {
-  const { nodes, devices, viewMode, setViewMode, addNode, updateNode, addDevice, updateDevice } = useSCADAStore();
+  const { nodes, devices, viewMode, setViewMode, addNode, updateNode, addDevice, updateDevice, removeNode, removeDevice } = useSCADAStore();
   const { isConnected, messages } = useMQTTStore();
+
+  // Enable alarm monitoring
+  useAlarmMonitoring();
+
+  // Track last processed message index to prevent message loss
+  const lastProcessedIndex = useRef(0);
 
   // Process incoming MQTT messages and update SCADA store
   useEffect(() => {
     const unsubscribe = useMQTTStore.subscribe((state) => {
-      const latestMessages = state.messages.slice(-10); // Process last 10 messages
+      // Process only new messages since last update
+      const newMessages = state.messages.slice(lastProcessedIndex.current);
 
-      latestMessages.forEach((msg) => {
+      newMessages.forEach((msg, index) => {
         const log = {
           id: `${msg.timestamp}`,
           timestamp: msg.timestamp,
@@ -86,11 +96,47 @@ export function SCADAView() {
             }
           }
         }
+
+        // Update last processed index
+        lastProcessedIndex.current = lastProcessedIndex.current + index + 1;
       });
     });
 
     return unsubscribe;
   }, [nodes, devices, addNode, updateNode, addDevice, updateDevice]);
+
+  // Periodic cleanup of stale offline nodes/devices (memory leak prevention)
+  useEffect(() => {
+    const TTL_MS = 3600000; // 1 hour
+
+    const cleanupInterval = setInterval(() => {
+      const now = BigInt(Date.now());
+
+      // Clean up offline nodes that haven't been seen in > TTL
+      Array.from(nodes.entries()).forEach(([nodeKey, node]) => {
+        if (!node.online && node.lastUpdate) {
+          const age = Number(now - node.lastUpdate);
+          if (age > TTL_MS) {
+            console.log(`Removing stale node: ${nodeKey} (offline for ${Math.round(age / 1000)}s)`);
+            removeNode(nodeKey);
+          }
+        }
+      });
+
+      // Clean up offline devices that haven't been seen in > TTL
+      Array.from(devices.entries()).forEach(([deviceId, device]) => {
+        if (!device.online && device.lastUpdate) {
+          const age = Number(now - device.lastUpdate);
+          if (age > TTL_MS) {
+            console.log(`Removing stale device: ${deviceId} (offline for ${Math.round(age / 1000)}s)`);
+            removeDevice(deviceId);
+          }
+        }
+      });
+    }, 300000); // Check every 5 minutes
+
+    return () => clearInterval(cleanupInterval);
+  }, [nodes, devices, removeNode, removeDevice]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -161,10 +207,10 @@ export function SCADAView() {
 
         {/* View Mode Tabs */}
         <div className="mb-6 flex gap-2">
-          {(['grid', 'tree', 'detail'] as const).map((mode) => (
+          {(['grid', 'tree', 'detail', 'alarms'] as const).map((mode) => (
             <button
               key={mode}
-              onClick={() => setViewMode(mode)}
+              onClick={() => setViewMode(mode as any)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 viewMode === mode
                   ? 'bg-emerald-600 text-white'
@@ -174,6 +220,7 @@ export function SCADAView() {
               {mode === 'grid' && '⊞ Grid View'}
               {mode === 'tree' && '⊟ Tree View'}
               {mode === 'detail' && '⊡ Detail View'}
+              {mode === 'alarms' && '🚨 Alarms'}
             </button>
           ))}
         </div>
@@ -192,10 +239,14 @@ export function SCADAView() {
               {viewMode === 'grid' && <GridView />}
               {viewMode === 'tree' && <TreeView />}
               {viewMode === 'detail' && <DetailPanel />}
+              {viewMode === 'alarms' && <AlarmPanel />}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Toast Notifications */}
+      <Toaster />
     </div>
   );
 }

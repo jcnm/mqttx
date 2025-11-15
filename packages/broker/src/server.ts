@@ -9,14 +9,15 @@ import websocket from '@fastify/websocket';
 import { ConfigLoader } from './config/loader.js';
 import { StateManager } from '@sparkplug/state';
 import { SparkplugBroker } from './mqtt/broker.js';
-import { registerSCADARoutes } from './routes/scada.js';
-import type { SCADAHistoryService } from './services/scada-history.js';
+import { SCADAHistoryService } from './services/scada-history.js';
+import { HistoryListener } from './services/history-listener.js';
+import type { Redis } from 'ioredis';
 
 export interface ServerOptions {
   config: ConfigLoader;
   broker: SparkplugBroker;
   stateManager: StateManager;
-  historyService?: SCADAHistoryService;
+  redis?: Redis | null;
 }
 
 export async function createServer(options: ServerOptions) {
@@ -50,6 +51,16 @@ export async function createServer(options: ServerOptions) {
   });
 
   await fastify.register(websocket);
+
+  // Initialize SCADA History Service
+  const historyService = new SCADAHistoryService(options.redis || null);
+
+  // Attach history listener to broker (auto-store metrics)
+  if (options.redis) {
+    const historyListener = new HistoryListener(historyService);
+    historyListener.attach(options.broker.getAedes());
+    console.log('✅ SCADA history listener attached');
+  }
 
   // Health check
   fastify.get('/health', async () => {
@@ -171,6 +182,115 @@ export async function createServer(options: ServerOptions) {
     reply.send({ success: true, message: 'Rebirth requested' });
   });
 
+  // ===== SCADA History Endpoints =====
+
+  // Get metric history
+  fastify.get<{
+    Querystring: {
+      groupId: string;
+      edgeNodeId: string;
+      metricName: string;
+      deviceId?: string;
+      startTime?: string;
+      endTime?: string;
+      limit?: string;
+    };
+  }>('/api/history/metrics', async (request) => {
+    const { groupId, edgeNodeId, metricName, deviceId, startTime, endTime, limit } = request.query;
+
+    const nodeKey = `${groupId}/${edgeNodeId}`;
+
+    const history = await historyService.getMetricHistory({
+      nodeKey,
+      metricName,
+      deviceId,
+      startTime: startTime ? new Date(startTime) : undefined,
+      endTime: endTime ? new Date(endTime) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+    });
+
+    return { history };
+  });
+
+  // Get latest metric value
+  fastify.get<{
+    Params: {
+      groupId: string;
+      edgeNodeId: string;
+      metricName: string;
+    };
+    Querystring: {
+      deviceId?: string;
+    };
+  }>('/api/history/metrics/:groupId/:edgeNodeId/:metricName/latest', async (request) => {
+    const { groupId, edgeNodeId, metricName } = request.params;
+    const { deviceId } = request.query;
+
+    const latest = await historyService.getLatestValue(groupId, edgeNodeId, metricName, deviceId);
+
+    if (!latest) {
+      return { error: 'No data found' };
+    }
+
+    return latest;
+  });
+
+  // Get metric statistics
+  fastify.get<{
+    Querystring: {
+      groupId: string;
+      edgeNodeId: string;
+      metricName: string;
+      deviceId?: string;
+      startTime?: string;
+      endTime?: string;
+    };
+  }>('/api/history/stats', async (request) => {
+    const { groupId, edgeNodeId, metricName, deviceId, startTime, endTime } = request.query;
+
+    const nodeKey = `${groupId}/${edgeNodeId}`;
+
+    const stats = await historyService.getMetricStats({
+      nodeKey,
+      metricName,
+      deviceId,
+      startTime: startTime ? new Date(startTime) : undefined,
+      endTime: endTime ? new Date(endTime) : undefined,
+    });
+
+    return stats;
+  });
+
+  // Get all metrics for a node
+  fastify.get<{
+    Params: {
+      groupId: string;
+      edgeNodeId: string;
+    };
+  }>('/api/history/node/:groupId/:edgeNodeId/metrics', async (request) => {
+    const { groupId, edgeNodeId } = request.params;
+
+    const metrics = await historyService.getNodeMetrics(groupId, edgeNodeId);
+
+    return { metrics };
+  });
+
+  // Delete metric history
+  fastify.delete<{
+    Querystring: {
+      groupId: string;
+      edgeNodeId: string;
+      metricName: string;
+      deviceId?: string;
+    };
+  }>('/api/history/metrics', async (request) => {
+    const { groupId, edgeNodeId, metricName, deviceId } = request.query;
+
+    await historyService.deleteMetricHistory(groupId, edgeNodeId, metricName, deviceId);
+
+    return { success: true };
+  });
+
   // WebSocket for real-time updates
   fastify.get('/ws', { websocket: true }, (connection: any, req) => {
     const ws = connection.socket;
@@ -233,11 +353,6 @@ export async function createServer(options: ServerOptions) {
       monitor.off('clientDisconnect', clientDisconnectHandler);
       monitor.off('sessionStale', sessionStaleHandler);
     });
-  });
-
-  // Register SCADA routes
-  await registerSCADARoutes(fastify, {
-    historyService: options.historyService,
   });
 
   return fastify;

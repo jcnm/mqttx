@@ -72,15 +72,35 @@ export class StatePersistence {
     return this.connected;
   }
 
+  getClient(): Redis {
+    return this.redis;
+  }
+
   // Node State Persistence
   async saveNodeState(state: NodeState): Promise<void> {
     const key = `${this.keyPrefix}nodes:${state.groupId}:${state.edgeNodeId}`;
+
+    // Convert metrics Map to array, serializing BigInt values
+    const metricsArray = state.metrics
+      ? Array.from(state.metrics.entries()).map(([name, metric]) => [
+          name,
+          {
+            ...metric,
+            timestamp: metric.timestamp.toString(),
+            alias: metric.alias?.toString(),
+          },
+        ])
+      : [];
+
     const data = JSON.stringify({
-      ...state,
+      groupId: state.groupId,
+      edgeNodeId: state.edgeNodeId,
       bdSeq: state.bdSeq.toString(),
       seq: state.seq.toString(),
+      online: state.online,
+      lastSeen: state.lastSeen,
       birthTimestamp: state.birthTimestamp?.toString(),
-      metrics: state.metrics ? Array.from(state.metrics.entries()) : [],
+      metrics: metricsArray,
     });
 
     await this.redis.set(key, data);
@@ -96,12 +116,25 @@ export class StatePersistence {
     }
 
     const parsed = JSON.parse(data);
+
+    // Deserialize metrics, converting string BigInts back to BigInt
+    const metrics = new Map(
+      parsed.metrics.map(([name, metric]: [string, any]) => [
+        name,
+        {
+          ...metric,
+          timestamp: BigInt(metric.timestamp),
+          alias: metric.alias ? BigInt(metric.alias) : undefined,
+        },
+      ])
+    );
+
     return {
       ...parsed,
       bdSeq: BigInt(parsed.bdSeq),
       seq: BigInt(parsed.seq),
       birthTimestamp: parsed.birthTimestamp ? BigInt(parsed.birthTimestamp) : undefined,
-      metrics: new Map(parsed.metrics),
+      metrics,
     };
   }
 
@@ -118,12 +151,25 @@ export class StatePersistence {
       const data = await this.redis.get(key);
       if (data) {
         const parsed = JSON.parse(data);
+
+        // Deserialize metrics, converting string BigInts back to BigInt
+        const metrics = new Map(
+          parsed.metrics.map(([name, metric]: [string, any]) => [
+            name,
+            {
+              ...metric,
+              timestamp: BigInt(metric.timestamp),
+              alias: metric.alias ? BigInt(metric.alias) : undefined,
+            },
+          ])
+        );
+
         states.push({
           ...parsed,
           bdSeq: BigInt(parsed.bdSeq),
           seq: BigInt(parsed.seq),
           birthTimestamp: parsed.birthTimestamp ? BigInt(parsed.birthTimestamp) : undefined,
-          metrics: new Map(parsed.metrics),
+          metrics,
         });
       }
     }
@@ -134,10 +180,27 @@ export class StatePersistence {
   // Device State Persistence
   async saveDeviceState(state: DeviceState): Promise<void> {
     const key = `${this.keyPrefix}devices:${state.groupId}:${state.edgeNodeId}:${state.deviceId}`;
+
+    // Convert metrics Map to array, serializing BigInt values
+    const metricsArray = state.metrics
+      ? Array.from(state.metrics.entries()).map(([name, metric]) => [
+          name,
+          {
+            ...metric,
+            timestamp: metric.timestamp.toString(),
+            alias: metric.alias?.toString(),
+          },
+        ])
+      : [];
+
     const data = JSON.stringify({
-      ...state,
+      groupId: state.groupId,
+      edgeNodeId: state.edgeNodeId,
+      deviceId: state.deviceId,
+      online: state.online,
+      lastSeen: state.lastSeen,
       birthTimestamp: state.birthTimestamp?.toString(),
-      metrics: state.metrics ? Array.from(state.metrics.entries()) : [],
+      metrics: metricsArray,
     });
 
     await this.redis.set(key, data);
@@ -157,10 +220,23 @@ export class StatePersistence {
     }
 
     const parsed = JSON.parse(data);
+
+    // Deserialize metrics, converting string BigInts back to BigInt
+    const metrics = new Map(
+      parsed.metrics.map(([name, metric]: [string, any]) => [
+        name,
+        {
+          ...metric,
+          timestamp: BigInt(metric.timestamp),
+          alias: metric.alias ? BigInt(metric.alias) : undefined,
+        },
+      ])
+    );
+
     return {
       ...parsed,
       birthTimestamp: parsed.birthTimestamp ? BigInt(parsed.birthTimestamp) : undefined,
-      metrics: new Map(parsed.metrics),
+      metrics,
     };
   }
 
