@@ -18,6 +18,14 @@ interface SimulationState {
       lastPublish: number;
     }
   >;
+  deviceStates: Map<
+    string,
+    {
+      nodeId: string;
+      seq: number;
+      lastPublish: number;
+    }
+  >;
   messageCount: number;
   lastMessageCount: number;
   lastStatsUpdate: number;
@@ -26,6 +34,7 @@ interface SimulationState {
 export class SimulationEngine {
   private state: SimulationState = {
     nodeStates: new Map(),
+    deviceStates: new Map(),
     messageCount: 0,
     lastMessageCount: 0,
     lastStatsUpdate: Date.now(),
@@ -62,6 +71,13 @@ export class SimulationEngine {
       if (node.state === 'running') {
         this.initializeNodeState(nodeId, node);
         this.publishNodeBirth(node);
+        // Publish DBIRTH for all devices
+        if (node.devices && node.devices.length > 0) {
+          for (const device of node.devices) {
+            this.initializeDeviceState(device.id, node.id);
+            this.publishDeviceBirth(node, device);
+          }
+        }
       }
     }
 
@@ -72,6 +88,12 @@ export class SimulationEngine {
       for (const [nodeId, node] of nodes) {
         if (node.state === 'running') {
           this.updateNode(nodeId, node, currentTime);
+          // Update devices
+          if (node.devices && node.devices.length > 0) {
+            for (const device of node.devices) {
+              this.updateDevice(device.id, node, device, currentTime);
+            }
+          }
         }
       }
 
@@ -103,14 +125,22 @@ export class SimulationEngine {
       this.state.intervalId = undefined;
     }
 
-    // Publish death certificates for all running nodes
+    // Publish death certificates for all running nodes and devices
     for (const [, node] of nodes) {
       if (node.state === 'running') {
+        // Publish DDEATH for all devices first
+        if (node.devices && node.devices.length > 0) {
+          for (const device of node.devices) {
+            this.publishDeviceDeath(node, device);
+          }
+        }
+        // Then publish NDEATH for node
         this.publishNodeDeath(node);
       }
     }
 
     this.state.nodeStates.clear();
+    this.state.deviceStates.clear();
   }
 
   /**
@@ -253,6 +283,111 @@ export class SimulationEngine {
       this.publishNodeData(node, currentTime);
       nodeState.lastPublish = now;
     }
+  }
+
+  /**
+   * Initialize state for a device
+   */
+  private initializeDeviceState(deviceId: string, nodeId: string): void {
+    this.state.deviceStates.set(deviceId, {
+      nodeId,
+      seq: 0,
+      lastPublish: Date.now(),
+    });
+  }
+
+  /**
+   * Publish DBIRTH message
+   */
+  private publishDeviceBirth(node: SimulatedEoN, device: any): void {
+    if (!this.mqttClient || !this.mqttClient.connected) {
+      console.warn('MQTT client not connected');
+      return;
+    }
+
+    const deviceState = this.state.deviceStates.get(device.id);
+    if (!deviceState) return;
+
+    const topic = `spBv1.0/${node.config.groupId}/DBIRTH/${node.config.edgeNodeId}/${device.deviceId}`;
+
+    // Build Sparkplug payload
+    const payload = {
+      timestamp: Date.now(),
+      metrics: this.buildMetrics(device.metrics || [], 0),
+      seq: this.incrementDeviceSeq(device.id),
+    };
+
+    this.publish(topic, payload, node.config.network.qos);
+
+    console.log(`📤 DBIRTH: ${topic}`);
+  }
+
+  /**
+   * Publish DDATA message
+   */
+  private publishDeviceData(node: SimulatedEoN, device: any, currentTime: number): void {
+    if (!this.mqttClient || !this.mqttClient.connected) return;
+
+    const topic = `spBv1.0/${node.config.groupId}/DDATA/${node.config.edgeNodeId}/${device.deviceId}`;
+
+    const payload = {
+      timestamp: Date.now(),
+      metrics: this.buildMetrics(device.metrics || [], currentTime),
+      seq: this.incrementDeviceSeq(device.id),
+    };
+
+    this.publish(topic, payload, node.config.network.qos);
+  }
+
+  /**
+   * Publish DDEATH message
+   */
+  private publishDeviceDeath(node: SimulatedEoN, device: any): void {
+    if (!this.mqttClient || !this.mqttClient.connected) return;
+
+    const deviceState = this.state.deviceStates.get(device.id);
+    if (!deviceState) return;
+
+    const topic = `spBv1.0/${node.config.groupId}/DDEATH/${node.config.edgeNodeId}/${device.deviceId}`;
+
+    const payload = {
+      timestamp: Date.now(),
+      metrics: [],
+    };
+
+    this.publish(topic, payload, node.config.network.qos);
+
+    console.log(`📤 DDEATH: ${topic}`);
+  }
+
+  /**
+   * Update a device (publish DDATA if needed)
+   */
+  private updateDevice(deviceId: string, node: SimulatedEoN, device: any, currentTime: number): void {
+    const deviceState = this.state.deviceStates.get(deviceId);
+    if (!deviceState) return;
+
+    // Check if device data production is enabled
+    if (!device.dataProduction?.enabled) return;
+
+    const now = Date.now();
+    const publishInterval = device.dataProduction.frequency || 1000;
+
+    if (now - deviceState.lastPublish >= publishInterval / this.speedMultiplier) {
+      this.publishDeviceData(node, device, currentTime);
+      deviceState.lastPublish = now;
+    }
+  }
+
+  /**
+   * Increment device sequence number (0-255 wrapping)
+   */
+  private incrementDeviceSeq(deviceId: string): number {
+    const deviceState = this.state.deviceStates.get(deviceId);
+    if (!deviceState) return 0;
+
+    deviceState.seq = (deviceState.seq + 1) % 256;
+    return deviceState.seq;
   }
 
   /**
