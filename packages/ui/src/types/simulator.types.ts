@@ -74,20 +74,70 @@ export interface MetricDefinition {
 }
 
 /**
+ * Sparkplug B PropertyValue
+ * Based on ISO/IEC 20237:2023
+ */
+export interface PropertyValue {
+  type: number;
+  isNull?: boolean;
+  value?: number | bigint | boolean | string;
+}
+
+/**
+ * Sparkplug B PropertySet
+ * Based on ISO/IEC 20237:2023
+ */
+export interface PropertySet {
+  keys: string[];
+  values: PropertyValue[];
+}
+
+/**
+ * Sparkplug B DataSet
+ * Based on ISO/IEC 20237:2023
+ */
+export interface DataSetValue {
+  value: number | bigint | boolean | string;
+}
+
+export interface DataSetRow {
+  elements: DataSetValue[];
+}
+
+export interface DataSet {
+  numOfColumns: bigint;
+  columns: string[];
+  types: number[];
+  rows: DataSetRow[];
+}
+
+/**
+ * Sparkplug B Template
+ * Based on ISO/IEC 20237:2023
+ */
+export interface Template {
+  version?: string;
+  metrics?: SparkplugMetric[];
+  parameters?: PropertySet;
+  templateRef?: string;
+  isDefinition?: boolean;
+}
+
+/**
  * Sparkplug B Metric - Strongly typed for encoder
+ * Based on ISO/IEC 20237:2023 (Sparkplug Specification)
  * All fields match the protobuf schema exactly
  */
 export interface SparkplugMetric {
-  name: string;
-  timestamp: bigint;
-  datatype: number;
-  value: number | string | boolean | bigint | Uint8Array;
+  name?: string; // Optional for alias-based metrics
   alias?: bigint; // MUST be bigint (UInt64)
-  properties?: {
-    engineeringUnits?: string;
-    description?: string;
-    [key: string]: any;
-  };
+  timestamp: bigint; // MUST be bigint
+  datatype: number; // Sparkplug DataType enum value
+  isHistorical?: boolean;
+  isTransient?: boolean;
+  isNull?: boolean;
+  value?: number | bigint | boolean | string | Uint8Array | DataSet | Template | PropertySet;
+  properties?: PropertySet; // Sparkplug PropertySet structure
 }
 
 /**

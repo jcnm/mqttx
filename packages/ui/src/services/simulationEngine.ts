@@ -9,6 +9,8 @@ import type {
   MetricDefinition,
   SparkplugMetric,
   SparkplugPayload,
+  PropertySet,
+  PropertyValue,
 } from '../types/simulator.types';
 import { generateMetricValue, convertToDatatype, clampValue } from './dataGenerator';
 import { encodePayload } from '@sparkplug/codec';
@@ -612,11 +614,61 @@ export class SimulationEngine {
   }
 
   /**
-   * Get default value for a Sparkplug datatype
+   * Convert simple properties object to Sparkplug PropertySet
+   * Based on ISO/IEC 20237:2023 (Sparkplug Specification)
+   */
+  private createPropertySet(props: {
+    engineeringUnits?: string;
+    description?: string;
+    min?: number;
+    max?: number;
+  }): PropertySet {
+    const keys: string[] = [];
+    const values: PropertyValue[] = [];
+
+    if (props.engineeringUnits !== undefined) {
+      keys.push('engineeringUnits');
+      values.push({
+        type: 12, // String
+        value: props.engineeringUnits,
+      });
+    }
+
+    if (props.description !== undefined) {
+      keys.push('description');
+      values.push({
+        type: 12, // String
+        value: props.description,
+      });
+    }
+
+    if (props.min !== undefined) {
+      keys.push('min');
+      values.push({
+        type: 10, // Double
+        value: props.min,
+      });
+    }
+
+    if (props.max !== undefined) {
+      keys.push('max');
+      values.push({
+        type: 10, // Double
+        value: props.max,
+      });
+    }
+
+    return { keys, values };
+  }
+
+  /**
+   * Get default value for a Sparkplug B datatype
    * Used when metric value is null/undefined
+   * Based on ISO/IEC 20237:2023 (Sparkplug Specification)
    */
   private getDefaultValueForDatatype(datatype: number): any {
     switch (datatype) {
+      // Integer types
       case 1: // Int8
       case 2: // Int16
       case 3: // Int32
@@ -624,24 +676,83 @@ export class SimulationEngine {
       case 6: // UInt16
       case 7: // UInt32
         return 0;
+
+      // 64-bit types (BigInt)
       case 4: // Int64
       case 8: // UInt64
-      case 9: // DateTime
+      case 13: // DateTime (milliseconds since epoch as BigInt)
         return BigInt(0);
-      case 10: // Float
-      case 11: // Double
+
+      // Floating point types
+      case 9: // Float
+      case 10: // Double
         return 0.0;
-      case 12: // Boolean
+
+      // Boolean
+      case 11: // Boolean
         return false;
-      case 13: // String
+
+      // String types
+      case 12: // String
       case 14: // Text
         return '';
+
+      // UUID
       case 15: // UUID
         return '00000000-0000-0000-0000-000000000000';
-      case 16: // Bytes
+
+      // DataSet (complex structure)
+      case 16: // DataSet
+        return {
+          numOfColumns: BigInt(0),
+          columns: [],
+          types: [],
+          rows: [],
+        };
+
+      // Binary types
+      case 17: // Bytes
         return new Uint8Array(0);
+
+      case 18: // File
+        return new Uint8Array(0);
+
+      // Template (complex structure)
+      case 19: // Template
+        return {
+          metrics: [],
+        };
+
+      // PropertySet (complex structure)
+      case 20: // PropertySet
+        return {
+          keys: [],
+          values: [],
+        };
+
+      case 21: // PropertySetList
+        return [];
+
+      // Array types
+      case 22: // Int8Array
+      case 23: // Int16Array
+      case 24: // Int32Array
+      case 26: // UInt8Array
+      case 27: // UInt16Array
+      case 28: // UInt32Array
+      case 30: // FloatArray
+      case 31: // DoubleArray
+      case 32: // BooleanArray
+      case 33: // StringArray
+        return [];
+
+      case 25: // Int64Array
+      case 29: // UInt64Array
+      case 34: // DateTimeArray
+        return [];
+
       default:
-        console.warn(`⚠️  Unknown datatype ${datatype}, defaulting to 0`);
+        console.warn(`⚠️  Unknown Sparkplug datatype ${datatype}, defaulting to 0`);
         return 0;
     }
   }
@@ -683,7 +794,7 @@ export class SimulationEngine {
         value = this.getDefaultValueForDatatype(metricDef.datatype);
       }
 
-      // Build strongly-typed SparkplugMetric
+      // Build strongly-typed SparkplugMetric (Sparkplug B compliant)
       const metric: SparkplugMetric = {
         name: metricDef.name,
         timestamp: BigInt(Date.now()),
@@ -698,14 +809,12 @@ export class SimulationEngine {
           : BigInt(metricDef.alias);
       }
 
-      // Add optional properties
+      // Add optional properties (convert to Sparkplug PropertySet)
       if (metricDef.properties) {
-        metric.properties = {};
-        if (metricDef.properties.engineeringUnits) {
-          metric.properties.engineeringUnits = metricDef.properties.engineeringUnits;
-        }
-        if (metricDef.properties.description) {
-          metric.properties.description = metricDef.properties.description;
+        const propertySet = this.createPropertySet(metricDef.properties);
+        // Only add if we have properties
+        if (propertySet.keys.length > 0) {
+          metric.properties = propertySet;
         }
       }
 
