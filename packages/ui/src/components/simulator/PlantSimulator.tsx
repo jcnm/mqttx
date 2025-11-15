@@ -55,54 +55,74 @@ export function PlantSimulator() {
     prevUptimeRef.current = stats.uptime;
   }, [stats.uptime]);
 
-  // Start/stop/pause/resume simulation engine
+  // Control simulation based on isRunning state
   useEffect(() => {
-    if (!simulationEngineRef.current) return;
+    if (!simulationEngineRef.current) {
+      console.error('❌ Simulation engine not initialized!');
+      return;
+    }
 
-    // Check if any nodes are paused (resume scenario)
-    const hasPausedNodes = Array.from(nodes.values()).some(n => n.state === 'paused');
+    console.log('🎮 Simulation control - isRunning:', isRunning, 'engine.isRunning():', simulationEngineRef.current.isRunning());
 
     if (isRunning) {
+      // START or RESUME
+      const hasPausedNodes = Array.from(nodes.values()).some(n => n.state === 'paused');
+
       if (hasPausedNodes) {
-        // Resume from pause
-        console.log('▶️  Resuming simulation...');
+        // RESUME from pause
+        console.log('▶️  RESUME simulation');
         simulationEngineRef.current.resume();
       } else {
-        // If simulation is running and nodes changed, restart it
-        // First stop the current simulation
-        if (simulationEngineRef.current.isRunning()) {
-          console.log('📝 Nodes changed - restarting simulation...');
-          simulationEngineRef.current.stop(nodes);
-        }
-
-        // Then start with updated nodes
+        // START new simulation
+        console.log('🚀 START simulation');
         simulationEngineRef.current.start(nodes, (engineStats) => {
           updateStats(engineStats);
         });
       }
     } else {
-      // Only pause/stop if actually running
+      // STOP or PAUSE
       if (simulationEngineRef.current.isRunning()) {
-        // Check if nodes are being paused vs stopped
-        const hasRunningNodes = Array.from(nodes.values()).some(n => n.state === 'running');
-        if (hasPausedNodes && !hasRunningNodes) {
-          // Pause scenario
-          console.log('⏸️  Pausing simulation...');
+        const hasPausedNodes = Array.from(nodes.values()).some(n => n.state === 'paused');
+
+        if (hasPausedNodes) {
+          // PAUSE (no death messages)
+          console.log('⏸️  PAUSE simulation');
           simulationEngineRef.current.pause();
         } else {
-          // Stop scenario
-          console.log('🛑 Stopping simulation...');
+          // STOP (with death messages)
+          console.log('🛑 STOP simulation');
           simulationEngineRef.current.stop(nodes);
         }
       }
     }
+  }, [isRunning]);
 
+  // Handle nodes changes during running simulation
+  useEffect(() => {
+    if (!simulationEngineRef.current) return;
+    if (!isRunning) return;
+    if (!simulationEngineRef.current.isRunning()) return;
+
+    console.log('📝 Nodes changed during simulation - restarting...');
+
+    // Stop current simulation
+    simulationEngineRef.current.stop(nodes);
+
+    // Restart with updated nodes
+    simulationEngineRef.current.start(nodes, (engineStats) => {
+      updateStats(engineStats);
+    });
+  }, [nodes]);
+
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
       if (simulationEngineRef.current && simulationEngineRef.current.isRunning()) {
+        console.log('🧹 Cleanup - stopping simulation');
         simulationEngineRef.current.stop(nodes);
       }
     };
-  }, [isRunning, nodes, updateStats]);
+  }, []);
 
   // Sync nodes to ReactFlow
   useEffect(() => {

@@ -68,21 +68,41 @@ export class SimulationEngine {
     this.currentNodes = nodes;
     this.currentStatsCallback = onStatsUpdate;
 
-    console.log('🚀 Starting simulation engine...');
-    console.log(`   MQTT Client Connected: ${this.mqttClient?.connected ? '✅ Yes' : '❌ No'}`);
-    console.log(`   Total Nodes: ${nodes.size}`);
-    console.log(`   Speed Multiplier: ${this.speedMultiplier}x`);
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('🚀 STARTING SIMULATION ENGINE');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log(`📡 MQTT Client Status:`);
+    console.log(`   - Exists: ${this.mqttClient ? '✅ Yes' : '❌ No'}`);
+    console.log(`   - Connected: ${this.mqttClient?.connected ? '✅ Yes' : '❌ No'}`);
+    console.log(`   - Client ID: ${(this.mqttClient as any)?.options?.clientId || 'unknown'}`);
+    console.log(``);
+    console.log(`⚙️  Simulation Settings:`);
+    console.log(`   - Total Nodes: ${nodes.size}`);
+    console.log(`   - Speed Multiplier: ${this.speedMultiplier}x`);
+    console.log(``);
 
     // Debug node states
     let runningCount = 0;
     let stoppedCount = 0;
     let pausedCount = 0;
+    let nodesWithMetrics = 0;
+    let nodesWithDevices = 0;
+
     for (const [, node] of nodes) {
       if (node.state === 'running') runningCount++;
       else if (node.state === 'stopped') stoppedCount++;
       else if (node.state === 'paused') pausedCount++;
+      if (node.metrics && node.metrics.length > 0) nodesWithMetrics++;
+      if (node.devices && node.devices.length > 0) nodesWithDevices++;
     }
-    console.log(`   Node States: ${runningCount} running, ${stoppedCount} stopped, ${pausedCount} paused`);
+
+    console.log(`📊 Node States:`);
+    console.log(`   - Running: ${runningCount}`);
+    console.log(`   - Stopped: ${stoppedCount}`);
+    console.log(`   - Paused: ${pausedCount}`);
+    console.log(`   - Nodes with metrics: ${nodesWithMetrics}`);
+    console.log(`   - Nodes with devices: ${nodesWithDevices}`);
+    console.log('');
 
     this.state.startTime = Date.now();
     this.state.messageCount = 0;
@@ -90,29 +110,48 @@ export class SimulationEngine {
     this.state.lastStatsUpdate = Date.now();
 
     let totalDevices = 0;
+    let birthMessagesSent = 0;
+
+    console.log('🔧 INITIALIZING NODES...');
+    console.log('───────────────────────────────────────────────────────────────');
 
     // Initialize node states
     for (const [nodeId, node] of nodes) {
+      console.log(`\n📍 Node: ${node.config.groupId}/${node.config.edgeNodeId}`);
+      console.log(`   - State: ${node.state}`);
+      console.log(`   - Metrics: ${node.metrics?.length || 0}`);
+      console.log(`   - Devices: ${node.devices?.length || 0}`);
+
       if (node.state === 'running') {
-        console.log(`\n📍 Initializing node: ${node.config.groupId}/${node.config.edgeNodeId}`);
+        console.log(`   ✅ RUNNING - Initializing...`);
+
         this.initializeNodeState(nodeId, node);
         this.publishNodeBirth(node);
+        birthMessagesSent++;
 
         // Publish DBIRTH for all devices
         if (node.devices && node.devices.length > 0) {
-          console.log(`   └─ Devices: ${node.devices.length}`);
           for (const device of node.devices) {
+            console.log(`   └─ Device: ${device.deviceId} (${device.metrics?.length || 0} metrics)`);
             totalDevices++;
             this.initializeDeviceState(device.id, node.id);
             this.publishDeviceBirth(node, device);
+            birthMessagesSent++;
           }
         }
+      } else {
+        console.log(`   ⏭️  SKIPPED (state is '${node.state}', not 'running')`);
       }
     }
 
-    console.log(`\n✨ Simulation started!`);
-    console.log(`   Total Devices: ${totalDevices}`);
-    console.log(`   Messages will be published based on configured frequencies\n`);
+    console.log('\n═══════════════════════════════════════════════════════════════');
+    console.log(`✨ SIMULATION ENGINE STARTED`);
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log(`   Total Nodes Initialized: ${birthMessagesSent - totalDevices}`);
+    console.log(`   Total Devices Initialized: ${totalDevices}`);
+    console.log(`   Birth Messages Sent: ${birthMessagesSent}`);
+    console.log(`   Publishing interval: ${1000 / this.speedMultiplier}ms`);
+    console.log('═══════════════════════════════════════════════════════════════\n');
 
     // Start the main loop
     this.startMainLoop();
@@ -633,20 +672,40 @@ export class SimulationEngine {
    * Publish message to MQTT broker
    */
   private publish(topic: string, payload: any, qos: 0 | 1 | 2): void {
-    if (!this.mqttClient || !this.mqttClient.connected) {
-      console.warn('⚠️  MQTT client not connected, cannot publish to:', topic);
+    console.log(`\n📤 Attempting to publish...`);
+    console.log(`   Topic: ${topic}`);
+    console.log(`   QoS: ${qos}`);
+
+    if (!this.mqttClient) {
+      console.error(`❌ MQTT client is NULL!`);
       return;
     }
 
+    if (!this.mqttClient.connected) {
+      console.error(`❌ MQTT client NOT connected!`);
+      console.error(`   Client state:`, {
+        connected: this.mqttClient.connected,
+        reconnecting: (this.mqttClient as any).reconnecting,
+        options: (this.mqttClient as any).options?.clientId,
+      });
+      return;
+    }
+
+    console.log(`   ✅ MQTT client is connected`);
+
     try {
       // Encode payload using Sparkplug B protobuf format
+      console.log(`   🔧 Encoding payload...`);
       const encodedPayload = encodePayload(payload);
       const payloadBuffer = Buffer.from(encodedPayload);
+      console.log(`   ✅ Payload encoded (${payloadBuffer.length} bytes)`);
 
       // Extract message type from topic
       const topicParts = topic.split('/');
       const msgType = topicParts[2]; // NBIRTH, NDATA, DBIRTH, DDATA, etc.
       const metricsCount = payload.metrics?.length || 0;
+
+      console.log(`   📨 Publishing ${msgType} with ${metricsCount} metrics...`);
 
       this.mqttClient.publish(topic, payloadBuffer, { qos }, (error) => {
         if (error) {
@@ -654,11 +713,12 @@ export class SimulationEngine {
           console.error(`   Topic: ${topic}`);
         } else {
           this.state.messageCount++;
-          console.log(`✅ Published ${msgType} → ${topic} (${metricsCount} metrics, seq: ${payload.seq})`);
+          console.log(`✅ PUBLISHED ${msgType} → ${topic} (seq: ${payload.seq}, count: ${this.state.messageCount})`);
         }
       });
     } catch (error) {
       console.error(`❌ Error encoding/publishing message to ${topic}:`, error);
+      console.error(`   Error details:`, error);
     }
   }
 }
