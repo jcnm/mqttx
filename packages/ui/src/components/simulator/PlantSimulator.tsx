@@ -19,6 +19,7 @@ export function PlantSimulator() {
     setFlowNodes,
     isRunning,
     speed,
+    stats,
     addNode,
     updateStats,
   } = useSimulatorStore();
@@ -27,6 +28,7 @@ export function PlantSimulator() {
 
   const [showTemplates, setShowTemplates] = useState(false);
   const simulationEngineRef = useRef<ReturnType<typeof createSimulationEngine> | null>(null);
+  const prevUptimeRef = useRef<number>(0);
 
   // Initialize simulation engine
   useEffect(() => {
@@ -42,20 +44,61 @@ export function PlantSimulator() {
     }
   }, [speed]);
 
-  // Start/stop simulation engine
+  // Detect reset (when uptime goes from >0 to 0)
+  useEffect(() => {
+    if (prevUptimeRef.current > 0 && stats.uptime === 0) {
+      console.log('🔄 Reset detected - resetting simulation engine...');
+      if (simulationEngineRef.current) {
+        simulationEngineRef.current.reset();
+      }
+    }
+    prevUptimeRef.current = stats.uptime;
+  }, [stats.uptime]);
+
+  // Start/stop/pause/resume simulation engine
   useEffect(() => {
     if (!simulationEngineRef.current) return;
 
+    // Check if any nodes are paused (resume scenario)
+    const hasPausedNodes = Array.from(nodes.values()).some(n => n.state === 'paused');
+
     if (isRunning) {
-      simulationEngineRef.current.start(nodes, (engineStats) => {
-        updateStats(engineStats);
-      });
+      if (hasPausedNodes) {
+        // Resume from pause
+        console.log('▶️  Resuming simulation...');
+        simulationEngineRef.current.resume();
+      } else {
+        // If simulation is running and nodes changed, restart it
+        // First stop the current simulation
+        if (simulationEngineRef.current.isRunning()) {
+          console.log('📝 Nodes changed - restarting simulation...');
+          simulationEngineRef.current.stop(nodes);
+        }
+
+        // Then start with updated nodes
+        simulationEngineRef.current.start(nodes, (engineStats) => {
+          updateStats(engineStats);
+        });
+      }
     } else {
-      simulationEngineRef.current.stop(nodes);
+      // Only pause/stop if actually running
+      if (simulationEngineRef.current.isRunning()) {
+        // Check if nodes are being paused vs stopped
+        const hasRunningNodes = Array.from(nodes.values()).some(n => n.state === 'running');
+        if (hasPausedNodes && !hasRunningNodes) {
+          // Pause scenario
+          console.log('⏸️  Pausing simulation...');
+          simulationEngineRef.current.pause();
+        } else {
+          // Stop scenario
+          console.log('🛑 Stopping simulation...');
+          simulationEngineRef.current.stop(nodes);
+        }
+      }
     }
 
     return () => {
-      if (simulationEngineRef.current && isRunning) {
+      if (simulationEngineRef.current && simulationEngineRef.current.isRunning()) {
         simulationEngineRef.current.stop(nodes);
       }
     };
@@ -84,12 +127,13 @@ export function PlantSimulator() {
 
   const handleAddNode = () => {
     const nodeId = `node-${Date.now()}`;
+    const nodeNumber = nodes.size + 1;
     const newNode: SimulatedEoN = {
       id: nodeId,
       position: { x: 100, y: 100 },
       config: {
         groupId: 'Group1',
-        edgeNodeId: `Node${nodes.size + 1}`,
+        edgeNodeId: `Node${nodeNumber}`,
         protocol: 'SparkplugB',
         sparkplugConfig: {
           bdSeqStrategy: 'sequential',
@@ -109,7 +153,45 @@ export function PlantSimulator() {
       },
       devices: [],
       state: 'stopped',
-      metrics: [],
+      // Add default metrics so the node can publish immediately
+      metrics: [
+        {
+          name: 'NodeStatus',
+          datatype: 11, // Boolean
+          value: true,
+          properties: {
+            description: 'Node operational status',
+          },
+        },
+        {
+          name: 'Temperature',
+          datatype: 9, // Float
+          value: 25.0,
+          properties: {
+            engineeringUnits: '°C',
+            min: 0,
+            max: 100,
+            description: 'Node temperature',
+          },
+          logic: {
+            type: 'sine',
+            params: { min: 20, max: 30, frequency: 0.05 },
+          },
+        },
+        {
+          name: 'Uptime',
+          datatype: 7, // UInt32
+          value: 0,
+          properties: {
+            engineeringUnits: 'seconds',
+            description: 'Node uptime',
+          },
+          logic: {
+            type: 'linear',
+            params: { value: 0, slope: 1 },
+          },
+        },
+      ],
     };
 
     addNode(newNode);
