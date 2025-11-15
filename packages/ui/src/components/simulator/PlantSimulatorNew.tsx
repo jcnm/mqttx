@@ -86,30 +86,66 @@ export function PlantSimulatorNew() {
     prevStatsRef.current = currentStats;
   }, [stats]);
 
-  // Start/stop simulation
+  // Control simulation based on isRunning state
   useEffect(() => {
     if (!simulationEngineRef.current) {
-      console.warn('⚠️  Simulation engine not initialized');
+      console.error('❌ Simulation engine not initialized!');
       return;
     }
 
-    if (isRunning) {
-      console.log('▶️  isRunning changed to true - starting simulation');
-      simulationEngineRef.current.start(storeNodes, (engineStats) => {
-        updateStats(engineStats);
-      });
-    } else {
-      console.log('⏸️  isRunning changed to false - stopping simulation');
-      simulationEngineRef.current.stop(storeNodes);
-    }
+    console.log('🎮 Simulation control - isRunning:', isRunning, 'engine.isRunning():', simulationEngineRef.current.isRunning());
 
+    if (isRunning) {
+      // START or RESUME
+      const hasPausedNodes = Array.from(storeNodes.values()).some(n => n.state === 'paused');
+
+      if (hasPausedNodes) {
+        console.log('▶️  RESUME simulation');
+        simulationEngineRef.current.resume();
+      } else {
+        console.log('🚀 START simulation');
+        simulationEngineRef.current.start(storeNodes, (engineStats) => {
+          updateStats(engineStats);
+        });
+      }
+    } else {
+      // STOP or PAUSE
+      if (simulationEngineRef.current.isRunning()) {
+        const hasPausedNodes = Array.from(storeNodes.values()).some(n => n.state === 'paused');
+
+        if (hasPausedNodes) {
+          console.log('⏸️  PAUSE simulation');
+          simulationEngineRef.current.pause();
+        } else {
+          console.log('🛑 STOP simulation');
+          simulationEngineRef.current.stop(storeNodes);
+        }
+      }
+    }
+  }, [isRunning]);
+
+  // Handle nodes changes during running simulation
+  useEffect(() => {
+    if (!simulationEngineRef.current) return;
+    if (!isRunning) return;
+    if (!simulationEngineRef.current.isRunning()) return;
+
+    console.log('📝 Nodes changed during simulation - restarting...');
+    simulationEngineRef.current.stop(storeNodes);
+    simulationEngineRef.current.start(storeNodes, (engineStats) => {
+      updateStats(engineStats);
+    });
+  }, [storeNodes]);
+
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
-      if (simulationEngineRef.current && isRunning) {
+      if (simulationEngineRef.current && simulationEngineRef.current.isRunning()) {
         console.log('🧹 Cleanup - stopping simulation');
         simulationEngineRef.current.stop(storeNodes);
       }
     };
-  }, [isRunning, storeNodes, updateStats]);
+  }, []);
 
   // Sync store nodes to ReactFlow nodes
   useEffect(() => {

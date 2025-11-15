@@ -480,6 +480,7 @@ export class SimulationEngine {
           value: nodeState.bdSeq,
         },
       ],
+      seq: BigInt(this.incrementSeq(node.id)),
     };
 
     this.publish(topic, payload, node.config.network.qos);
@@ -568,6 +569,7 @@ export class SimulationEngine {
     const payload = {
       timestamp: BigInt(Date.now()),
       metrics: [],
+      seq: BigInt(this.incrementDeviceSeq(device.id)),
     };
 
     this.publish(topic, payload, node.config.network.qos);
