@@ -12,6 +12,7 @@ import {
   ScrollText,
   Clipboard,
   FolderOpen,
+  FileText,
   X,
   Copy
 } from 'lucide-react';
@@ -21,8 +22,9 @@ import { DeviceCard } from './DeviceCard';
 import { TemplateDisplay } from './TemplateDisplay';
 import { DataSetTable } from './DataSetTable';
 import { MetricHistoryPanel } from './MetricHistoryPanel';
+import { FileDisplay, type FileData } from './FileDisplay';
 
-type TabType = 'overview' | 'metrics' | 'birth' | 'history' | 'templates' | 'datasets';
+type TabType = 'overview' | 'metrics' | 'birth' | 'history' | 'templates' | 'datasets' | 'files';
 
 export function DetailPanel() {
   const { nodes, devices, selectedNode, selectedDevice, setSelectedNode, setSelectedDevice } =
@@ -86,10 +88,11 @@ export function DetailPanel() {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
   };
 
-  // Extract templates and datasets
-  const { templates, datasets, regularMetrics } = useMemo(() => {
+  // Extract templates, datasets, and files
+  const { templates, datasets, files, regularMetrics } = useMemo(() => {
     const templates = new Map();
     const datasets = new Map();
+    const files = new Map();
     const regularMetrics = new Map();
 
     entity?.metrics.forEach((metric, name) => {
@@ -99,12 +102,15 @@ export function DetailPanel() {
       } else if (metric.datatype === 16) {
         // DataSet
         datasets.set(name, { dataset: metric.value, timestamp: metric.timestamp });
+      } else if (metric.datatype === 18 && typeof metric.value === 'object') {
+        // File
+        files.set(name, { file: metric.value as unknown as FileData, timestamp: metric.timestamp });
       } else {
         regularMetrics.set(name, metric);
       }
     });
 
-    return { templates, datasets, regularMetrics };
+    return { templates, datasets, files, regularMetrics };
   }, [entity]);
 
   // Filter metrics (only regular metrics, excluding templates and datasets)
@@ -173,6 +179,12 @@ export function DetailPanel() {
       icon: FolderOpen,
       label: `DataSets (${datasets.size})`,
       tooltip: `DataSets - Tabular data structures (${datasets.size})`
+    },
+    {
+      id: 'files',
+      icon: FileText,
+      label: `Files (${files.size})`,
+      tooltip: `Files - Transferred files (${files.size})`
     },
   ];
 
@@ -492,6 +504,31 @@ export function DetailPanel() {
                 <p>No datasets available</p>
                 <p className="text-xs text-slate-500 mt-2">
                   DataSets will appear here when received in Sparkplug B messages
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Files Tab */}
+        {activeTab === 'files' && (
+          <div className="space-y-4">
+            {files.size > 0 ? (
+              Array.from(files.entries()).map(([name, { file, timestamp }]) => (
+                <FileDisplay
+                  key={name}
+                  name={name}
+                  file={file}
+                  timestamp={timestamp}
+                  compact={true}
+                />
+              ))
+            ) : (
+              <div className="text-center py-8 text-slate-400">
+                <FileText className="w-16 h-16 mx-auto mb-4 text-slate-600" />
+                <p>No files transferred</p>
+                <p className="text-xs text-slate-500 mt-2">
+                  Files (datatype 18) will appear here when transferred via Sparkplug B
                 </p>
               </div>
             )}

@@ -4,6 +4,7 @@
  */
 
 import { useMemo } from 'react';
+import { CheckCircle, AlertCircle, HelpCircle } from 'lucide-react';
 import type { MetricValue } from '../../types/scada.types';
 import {
   getDatatypeName,
@@ -47,6 +48,39 @@ export function MetricDisplay({ metric, compact = false, onClick }: MetricDispla
     return true;
   }, [metric.value, metric.properties]);
 
+  // Get quality indicator (ISO/IEC 20237:2023 Section 7.2.3)
+  const qualityInfo = useMemo(() => {
+    const quality = metric.properties?.quality;
+
+    if (quality === undefined) {
+      return { icon: null, label: null, color: '' };
+    }
+
+    // Sparkplug B Quality codes:
+    // 0-191: Good
+    // 192-223: Uncertain
+    // 224-255: Bad
+    if (quality >= 0 && quality < 192) {
+      return {
+        icon: <CheckCircle className="w-4 h-4" />,
+        label: 'Good',
+        color: 'text-emerald-500'
+      };
+    } else if (quality >= 192 && quality < 224) {
+      return {
+        icon: <HelpCircle className="w-4 h-4" />,
+        label: 'Uncertain',
+        color: 'text-yellow-500'
+      };
+    } else {
+      return {
+        icon: <AlertCircle className="w-4 h-4" />,
+        label: 'Bad',
+        color: 'text-red-500'
+      };
+    }
+  }, [metric.properties?.quality]);
+
   if (compact) {
     return (
       <div
@@ -79,11 +113,19 @@ export function MetricDisplay({ metric, compact = false, onClick }: MetricDispla
             <p className="text-xs text-slate-500 mt-0.5">Alias: {metric.alias.toString()}</p>
           )}
         </div>
-        <span
-          className={`px-2 py-1 text-xs font-medium text-white rounded ${datatypeColor}`}
-        >
-          {datatypeName}
-        </span>
+        <div className="flex items-center gap-2">
+          {qualityInfo.icon && (
+            <div className={`flex items-center gap-1 ${qualityInfo.color}`} title={`Quality: ${qualityInfo.label}`}>
+              {qualityInfo.icon}
+              <span className="text-xs">{qualityInfo.label}</span>
+            </div>
+          )}
+          <span
+            className={`px-2 py-1 text-xs font-medium text-white rounded ${datatypeColor}`}
+          >
+            {datatypeName}
+          </span>
+        </div>
       </div>
 
       {/* Value */}

@@ -5,7 +5,7 @@
 
 export interface MetricValue {
   name: string;
-  value: number | string | boolean | bigint;
+  value: number | string | boolean | bigint | Uint8Array | any;
   datatype: number; // Sparkplug datatype
   timestamp: bigint;
   alias?: bigint;
@@ -13,6 +13,7 @@ export interface MetricValue {
     engineeringUnits?: string;
     min?: number;
     max?: number;
+    quality?: number; // Sparkplug B quality code (0-255)
   };
 }
 

@@ -11,6 +11,7 @@ import { StateManager } from '@sparkplug/state';
 import { SparkplugBroker } from './mqtt/broker.js';
 import { SCADAHistoryService } from './services/scada-history.js';
 import { HistoryListener } from './services/history-listener.js';
+import { CommandService } from './services/command-service.js';
 import type { Redis } from 'ioredis';
 
 export interface ServerOptions {
@@ -61,6 +62,10 @@ export async function createServer(options: ServerOptions) {
     historyListener.attach(options.broker.getAedes());
     console.log('✅ SCADA history listener attached');
   }
+
+  // Initialize Command Service
+  const commandService = new CommandService(options.broker);
+  console.log('✅ SCADA command service initialized');
 
   // Health check
   fastify.get('/health', async () => {
@@ -150,8 +155,20 @@ export async function createServer(options: ServerOptions) {
   }>('/api/command/node', async (request, reply) => {
     const { groupId, edgeNodeId, metrics } = request.body;
 
-    // This would publish an NCMD message
-    reply.send({ success: true, message: 'Command sent' });
+    try {
+      await commandService.sendNodeCommand({
+        groupId,
+        edgeNodeId,
+        metrics,
+      });
+
+      reply.send({ success: true, message: 'NCMD sent successfully' });
+    } catch (error) {
+      reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   });
 
   // Send DCMD (Device Command)
@@ -165,8 +182,21 @@ export async function createServer(options: ServerOptions) {
   }>('/api/command/device', async (request, reply) => {
     const { groupId, edgeNodeId, deviceId, metrics } = request.body;
 
-    // This would publish a DCMD message
-    reply.send({ success: true, message: 'Command sent' });
+    try {
+      await commandService.sendDeviceCommand({
+        groupId,
+        edgeNodeId,
+        deviceId,
+        metrics,
+      });
+
+      reply.send({ success: true, message: 'DCMD sent successfully' });
+    } catch (error) {
+      reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   });
 
   // Request node rebirth
@@ -175,11 +205,73 @@ export async function createServer(options: ServerOptions) {
       groupId: string;
       edgeNodeId: string;
     };
-  }>('/api/rebirth', async (request, reply) => {
+  }>('/api/rebirth/node', async (request, reply) => {
     const { groupId, edgeNodeId } = request.body;
 
-    // This would send rebirth command
-    reply.send({ success: true, message: 'Rebirth requested' });
+    try {
+      await commandService.requestRebirth({ groupId, edgeNodeId });
+
+      reply.send({ success: true, message: 'Rebirth requested successfully' });
+    } catch (error) {
+      reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
+  // Request device rebirth
+  fastify.post<{
+    Body: {
+      groupId: string;
+      edgeNodeId: string;
+      deviceId: string;
+    };
+  }>('/api/rebirth/device', async (request, reply) => {
+    const { groupId, edgeNodeId, deviceId } = request.body;
+
+    try {
+      await commandService.requestDeviceRebirth(groupId, edgeNodeId, deviceId);
+
+      reply.send({ success: true, message: 'Device rebirth requested successfully' });
+    } catch (error) {
+      reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
+  // Write metric value
+  fastify.post<{
+    Body: {
+      groupId: string;
+      edgeNodeId: string;
+      deviceId?: string;
+      metricName: string;
+      value: number | string | boolean | bigint;
+      datatype: number;
+    };
+  }>('/api/command/write', async (request, reply) => {
+    const { groupId, edgeNodeId, deviceId, metricName, value, datatype } = request.body;
+
+    try {
+      await commandService.writeMetric(
+        groupId,
+        edgeNodeId,
+        metricName,
+        value,
+        datatype,
+        deviceId
+      );
+
+      reply.send({ success: true, message: 'Write command sent successfully' });
+    } catch (error) {
+      reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   });
 
   // ===== SCADA History Endpoints =====
