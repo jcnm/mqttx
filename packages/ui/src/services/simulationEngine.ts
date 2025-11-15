@@ -1395,6 +1395,56 @@ export class SimulationEngine {
       console.error(`   Error details:`, error);
     }
   }
+
+  /**
+   * Get current simulation state for persistence
+   * Returns internal state that can be saved and restored
+   */
+  public getSimulationState(): {
+    nodeStates: Map<string, any>;
+    deviceStates: Map<string, any>;
+  } {
+    return {
+      nodeStates: new Map(this.state.nodeStates),
+      deviceStates: new Map(this.state.deviceStates),
+    };
+  }
+
+  /**
+   * Restore simulation state from persistence
+   * CRITICAL: This is used when loading a saved simulation
+   * bdSeq will already be incremented by the persistence service
+   */
+  public restoreSimulationState(
+    nodeStates: Map<string, { bdSeq: string; seq: number; lastPublish: number; birthSent: boolean }>,
+    deviceStates: Map<string, { bdSeq: string; seq: number; lastPublish: number; birthSent: boolean; nodeId: string }>
+  ): void {
+    // Convert string bdSeq back to BigInt
+    nodeStates.forEach((state, nodeId) => {
+      this.state.nodeStates.set(nodeId, {
+        bdSeq: BigInt(state.bdSeq),
+        seq: state.seq,
+        lastPublish: state.lastPublish,
+        birthSent: state.birthSent,
+      });
+    });
+
+    deviceStates.forEach((state, deviceId) => {
+      this.state.deviceStates.set(deviceId, {
+        nodeId: state.nodeId,
+        seq: state.seq,
+        lastPublish: state.lastPublish,
+        birthSent: state.birthSent,
+      });
+    });
+
+    console.log('✅ Simulation state restored');
+    console.log(`   Nodes: ${this.state.nodeStates.size}`);
+    console.log(`   Devices: ${this.state.deviceStates.size}`);
+    this.state.nodeStates.forEach((state, nodeId) => {
+      console.log(`   [${nodeId}] bdSeq: ${state.bdSeq}, seq: ${state.seq}`);
+    });
+  }
 }
 
 /**
