@@ -6,6 +6,7 @@
 import type { MqttClient } from 'mqtt';
 import type { SimulatedEoN, MetricDefinition } from '../types/simulator.types';
 import { generateMetricValue, convertToDatatype, clampValue } from './dataGenerator';
+import { encodePayload } from '@sparkplug/codec';
 
 interface SimulationState {
   intervalId?: NodeJS.Timeout;
@@ -57,29 +58,44 @@ export class SimulationEngine {
     }) => void
   ): void {
     if (this.state.intervalId) {
-      console.warn('Simulation already running');
+      console.warn('⚠️  Simulation already running');
       return;
     }
+
+    console.log('🚀 Starting simulation engine...');
+    console.log(`   MQTT Client Connected: ${this.mqttClient?.connected ? '✅ Yes' : '❌ No'}`);
+    console.log(`   Total Nodes: ${nodes.size}`);
+    console.log(`   Speed Multiplier: ${this.speedMultiplier}x`);
 
     this.state.startTime = Date.now();
     this.state.messageCount = 0;
     this.state.lastMessageCount = 0;
     this.state.lastStatsUpdate = Date.now();
 
+    let totalDevices = 0;
+
     // Initialize node states
     for (const [nodeId, node] of nodes) {
       if (node.state === 'running') {
+        console.log(`\n📍 Initializing node: ${node.config.groupId}/${node.config.edgeNodeId}`);
         this.initializeNodeState(nodeId, node);
         this.publishNodeBirth(node);
+
         // Publish DBIRTH for all devices
         if (node.devices && node.devices.length > 0) {
+          console.log(`   └─ Devices: ${node.devices.length}`);
           for (const device of node.devices) {
+            totalDevices++;
             this.initializeDeviceState(device.id, node.id);
             this.publishDeviceBirth(node, device);
           }
         }
       }
     }
+
+    console.log(`\n✨ Simulation started!`);
+    console.log(`   Total Devices: ${totalDevices}`);
+    console.log(`   Messages will be published based on configured frequencies\n`);
 
     // Main simulation loop
     this.state.intervalId = setInterval(() => {
@@ -104,6 +120,11 @@ export class SimulationEngine {
         const messagesPerSecond =
           (this.state.messageCount - this.state.lastMessageCount) / elapsed;
 
+        // Log stats periodically (every 5 seconds)
+        if (Math.floor(currentTime) % 5 === 0) {
+          console.log(`📊 Stats: ${this.state.messageCount} total msgs | ${messagesPerSecond.toFixed(1)} msg/s | uptime: ${Math.floor(currentTime)}s`);
+        }
+
         onStatsUpdate({
           messagesPublished: this.state.messageCount,
           messagesPerSecond,
@@ -120,24 +141,40 @@ export class SimulationEngine {
    * Stop the simulation
    */
   stop(nodes: Map<string, SimulatedEoN>): void {
+    console.log('\n🛑 Stopping simulation engine...');
+
     if (this.state.intervalId) {
       clearInterval(this.state.intervalId);
       this.state.intervalId = undefined;
     }
 
+    let deathMsgCount = 0;
+
     // Publish death certificates for all running nodes and devices
     for (const [, node] of nodes) {
       if (node.state === 'running') {
+        console.log(`\n💀 Publishing death certificates for: ${node.config.groupId}/${node.config.edgeNodeId}`);
+
         // Publish DDEATH for all devices first
         if (node.devices && node.devices.length > 0) {
+          console.log(`   └─ Publishing DDEATH for ${node.devices.length} device(s)...`);
           for (const device of node.devices) {
             this.publishDeviceDeath(node, device);
+            deathMsgCount++;
           }
         }
         // Then publish NDEATH for node
         this.publishNodeDeath(node);
+        deathMsgCount++;
       }
     }
+
+    const uptime = this.state.startTime ? (Date.now() - this.state.startTime) / 1000 : 0;
+
+    console.log(`\n✅ Simulation stopped`);
+    console.log(`   Total Messages Published: ${this.state.messageCount}`);
+    console.log(`   Death Certificates: ${deathMsgCount}`);
+    console.log(`   Total Uptime: ${Math.floor(uptime)}s\n`);
 
     this.state.nodeStates.clear();
     this.state.deviceStates.clear();
@@ -194,7 +231,7 @@ export class SimulationEngine {
    */
   private publishNodeBirth(node: SimulatedEoN): void {
     if (!this.mqttClient || !this.mqttClient.connected) {
-      console.warn('MQTT client not connected');
+      console.warn('⚠️  MQTT client not connected');
       return;
     }
 
@@ -205,22 +242,20 @@ export class SimulationEngine {
 
     // Build Sparkplug payload
     const payload = {
-      timestamp: Date.now(),
+      timestamp: BigInt(Date.now()),
       metrics: this.buildMetrics(node.metrics || [], 0),
-      seq: this.incrementSeq(node.id),
+      seq: BigInt(this.incrementSeq(node.id)),
     };
 
     // Add bdSeq to metrics
     payload.metrics.unshift({
       name: 'bdSeq',
-      timestamp: Date.now(),
+      timestamp: BigInt(Date.now()),
       datatype: 8, // UInt64
       value: nodeState.bdSeq,
     });
 
     this.publish(topic, payload, node.config.network.qos);
-
-    console.log(`📤 NBIRTH: ${topic}`);
   }
 
   /**
@@ -232,9 +267,9 @@ export class SimulationEngine {
     const topic = `spBv1.0/${node.config.groupId}/NDATA/${node.config.edgeNodeId}`;
 
     const payload = {
-      timestamp: Date.now(),
+      timestamp: BigInt(Date.now()),
       metrics: this.buildMetrics(node.metrics || [], currentTime),
-      seq: this.incrementSeq(node.id),
+      seq: BigInt(this.incrementSeq(node.id)),
     };
 
     this.publish(topic, payload, node.config.network.qos);
@@ -252,11 +287,11 @@ export class SimulationEngine {
     const topic = `spBv1.0/${node.config.groupId}/NDEATH/${node.config.edgeNodeId}`;
 
     const payload = {
-      timestamp: Date.now(),
+      timestamp: BigInt(Date.now()),
       metrics: [
         {
           name: 'bdSeq',
-          timestamp: Date.now(),
+          timestamp: BigInt(Date.now()),
           datatype: 8,
           value: nodeState.bdSeq,
         },
@@ -264,8 +299,6 @@ export class SimulationEngine {
     };
 
     this.publish(topic, payload, node.config.network.qos);
-
-    console.log(`📤 NDEATH: ${topic}`);
   }
 
   /**
@@ -301,7 +334,7 @@ export class SimulationEngine {
    */
   private publishDeviceBirth(node: SimulatedEoN, device: any): void {
     if (!this.mqttClient || !this.mqttClient.connected) {
-      console.warn('MQTT client not connected');
+      console.warn('⚠️  MQTT client not connected');
       return;
     }
 
@@ -312,14 +345,12 @@ export class SimulationEngine {
 
     // Build Sparkplug payload
     const payload = {
-      timestamp: Date.now(),
+      timestamp: BigInt(Date.now()),
       metrics: this.buildMetrics(device.metrics || [], 0),
-      seq: this.incrementDeviceSeq(device.id),
+      seq: BigInt(this.incrementDeviceSeq(device.id)),
     };
 
     this.publish(topic, payload, node.config.network.qos);
-
-    console.log(`📤 DBIRTH: ${topic}`);
   }
 
   /**
@@ -331,9 +362,9 @@ export class SimulationEngine {
     const topic = `spBv1.0/${node.config.groupId}/DDATA/${node.config.edgeNodeId}/${device.deviceId}`;
 
     const payload = {
-      timestamp: Date.now(),
+      timestamp: BigInt(Date.now()),
       metrics: this.buildMetrics(device.metrics || [], currentTime),
-      seq: this.incrementDeviceSeq(device.id),
+      seq: BigInt(this.incrementDeviceSeq(device.id)),
     };
 
     this.publish(topic, payload, node.config.network.qos);
@@ -351,13 +382,11 @@ export class SimulationEngine {
     const topic = `spBv1.0/${node.config.groupId}/DDEATH/${node.config.edgeNodeId}/${device.deviceId}`;
 
     const payload = {
-      timestamp: Date.now(),
+      timestamp: BigInt(Date.now()),
       metrics: [],
     };
 
     this.publish(topic, payload, node.config.network.qos);
-
-    console.log(`📤 DDEATH: ${topic}`);
   }
 
   /**
@@ -398,7 +427,7 @@ export class SimulationEngine {
     currentTime: number
   ): Array<{
     name: string;
-    timestamp: number;
+    timestamp: bigint;
     datatype: number;
     value: any;
     alias?: bigint;
@@ -432,7 +461,7 @@ export class SimulationEngine {
 
       const metric: any = {
         name: metricDef.name,
-        timestamp: Date.now(),
+        timestamp: BigInt(Date.now()),
         datatype: metricDef.datatype,
         value,
       };
@@ -459,21 +488,32 @@ export class SimulationEngine {
    * Publish message to MQTT broker
    */
   private publish(topic: string, payload: any, qos: 0 | 1 | 2): void {
-    if (!this.mqttClient || !this.mqttClient.connected) return;
+    if (!this.mqttClient || !this.mqttClient.connected) {
+      console.warn('⚠️  MQTT client not connected, cannot publish to:', topic);
+      return;
+    }
 
     try {
-      // Convert to JSON for now (in production, use @sparkplug/codec to encode)
-      const payloadBuffer = Buffer.from(JSON.stringify(payload));
+      // Encode payload using Sparkplug B protobuf format
+      const encodedPayload = encodePayload(payload);
+      const payloadBuffer = Buffer.from(encodedPayload);
+
+      // Extract message type from topic
+      const topicParts = topic.split('/');
+      const msgType = topicParts[2]; // NBIRTH, NDATA, DBIRTH, DDATA, etc.
+      const metricsCount = payload.metrics?.length || 0;
 
       this.mqttClient.publish(topic, payloadBuffer, { qos }, (error) => {
         if (error) {
-          console.error('Publish error:', error);
+          console.error(`❌ Failed to publish ${msgType}:`, error);
+          console.error(`   Topic: ${topic}`);
         } else {
           this.state.messageCount++;
+          console.log(`✅ Published ${msgType} → ${topic} (${metricsCount} metrics, seq: ${payload.seq})`);
         }
       });
     } catch (error) {
-      console.error('Error publishing message:', error);
+      console.error(`❌ Error encoding/publishing message to ${topic}:`, error);
     }
   }
 }
