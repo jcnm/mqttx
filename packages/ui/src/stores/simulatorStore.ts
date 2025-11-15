@@ -216,7 +216,7 @@ export const useSimulatorStore = create<SimulatorState>()(
                   },
                   {
                     name: 'RunHours',
-                    datatype: 12, // UInt32
+                    datatype: 7, // UInt32
                     value: 15420,
                     properties: {
                       engineeringUnits: 'hours',
