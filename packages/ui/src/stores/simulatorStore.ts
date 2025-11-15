@@ -17,6 +17,42 @@ import type {
 // Enable Immer support for Map and Set
 enableMapSet();
 
+/**
+ * Get initial value for a metric based on its type
+ */
+function getInitialMetricValue(metric: any): any {
+  // If metric has a static value defined, use it
+  if (metric.value !== undefined && !metric.logic) {
+    return metric.value;
+  }
+
+  // If metric has logic, calculate initial value based on logic type
+  if (metric.logic) {
+    switch (metric.logic.type) {
+      case 'static':
+        return metric.logic.params.value ?? 0;
+      case 'sine':
+      case 'random':
+        return metric.logic.params.min ?? 0;
+      case 'linear':
+        return metric.logic.params.value ?? 0;
+      default:
+        return 0;
+    }
+  }
+
+  // Default based on datatype
+  switch (metric.datatype) {
+    case 11: // Boolean
+      return false;
+    case 12: // String
+    case 14: // Text
+      return '';
+    default:
+      return 0;
+  }
+}
+
 interface SimulatorState {
   // Data
   nodes: Map<string, SimulatedEoN>;
@@ -446,9 +482,32 @@ export const useSimulatorStore = create<SimulatorState>()(
     resetSimulation: () =>
       set((state) => {
         state.isRunning = false;
+
+        // Reset all nodes and their metrics
         for (const [id, node] of state.nodes) {
-          state.nodes.set(id, { ...node, state: 'stopped' });
+          // Reset node metrics to initial values
+          const resetMetrics = node.metrics.map((metric) => ({
+            ...metric,
+            value: getInitialMetricValue(metric),
+          }));
+
+          // Reset device metrics to initial values
+          const resetDevices = node.devices.map((device) => ({
+            ...device,
+            metrics: device.metrics.map((metric) => ({
+              ...metric,
+              value: getInitialMetricValue(metric),
+            })),
+          }));
+
+          state.nodes.set(id, {
+            ...node,
+            state: 'stopped',
+            metrics: resetMetrics,
+            devices: resetDevices,
+          });
         }
+
         state.stats = {
           totalNodes: state.nodes.size,
           runningNodes: 0,

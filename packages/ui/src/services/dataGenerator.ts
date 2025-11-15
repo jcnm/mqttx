@@ -125,7 +125,12 @@ export function generateMetricValue(
     }
 
     case 'sine': {
-      const amplitude = logic.params.amplitude ?? 1;
+      // Calculate amplitude from min/max if not explicitly provided
+      const amplitude = logic.params.amplitude ?? (
+        logic.params.min !== undefined && logic.params.max !== undefined
+          ? (logic.params.max - logic.params.min) / 2
+          : 1
+      );
       const frequency = logic.params.frequency ?? 1;
       const phase = logic.params.phase ?? 0;
       const offset = logic.params.min !== undefined && logic.params.max !== undefined

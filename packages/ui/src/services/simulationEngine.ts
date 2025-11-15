@@ -41,6 +41,9 @@ export class SimulationEngine {
     lastStatsUpdate: Date.now(),
   };
 
+  private currentNodes: Map<string, SimulatedEoN> | null = null;
+  private currentStatsCallback: ((stats: { messagesPublished: number; messagesPerSecond: number; uptime: number }) => void) | null = null;
+
   constructor(
     private mqttClient: MqttClient | null,
     private speedMultiplier: number = 1
@@ -61,6 +64,10 @@ export class SimulationEngine {
       console.warn('⚠️  Simulation already running');
       return;
     }
+
+    // Save references for speed changes
+    this.currentNodes = nodes;
+    this.currentStatsCallback = onStatsUpdate;
 
     console.log('🚀 Starting simulation engine...');
     console.log(`   MQTT Client Connected: ${this.mqttClient?.connected ? '✅ Yes' : '❌ No'}`);
@@ -97,7 +104,19 @@ export class SimulationEngine {
     console.log(`   Total Devices: ${totalDevices}`);
     console.log(`   Messages will be published based on configured frequencies\n`);
 
-    // Main simulation loop
+    // Start the main loop
+    this.startMainLoop();
+  }
+
+  /**
+   * Main simulation loop (extracted for speed changes)
+   */
+  private startMainLoop(): void {
+    if (!this.currentNodes || !this.currentStatsCallback) return;
+
+    const nodes = this.currentNodes;
+    const onStatsUpdate = this.currentStatsCallback;
+
     this.state.intervalId = setInterval(() => {
       const currentTime = (Date.now() - (this.state.startTime || 0)) / 1000;
 
@@ -176,15 +195,42 @@ export class SimulationEngine {
     console.log(`   Death Certificates: ${deathMsgCount}`);
     console.log(`   Total Uptime: ${Math.floor(uptime)}s\n`);
 
+    // Synchronize final stats to UI before clearing
+    if (this.currentStatsCallback) {
+      this.currentStatsCallback({
+        messagesPublished: this.state.messageCount,
+        messagesPerSecond: 0,
+        uptime,
+      });
+    }
+
     this.state.nodeStates.clear();
     this.state.deviceStates.clear();
+    this.currentNodes = null;
+    this.currentStatsCallback = null;
   }
 
   /**
-   * Update speed multiplier
+   * Update speed multiplier (restarts interval if running)
    */
   setSpeed(speed: number): void {
+    const wasRunning = this.state.intervalId !== undefined;
+
     this.speedMultiplier = speed;
+
+    // If simulation is running, restart the interval with new speed
+    if (wasRunning) {
+      console.log(`⚡ Updating simulation speed to ${speed}x...`);
+
+      // Clear current interval
+      if (this.state.intervalId) {
+        clearInterval(this.state.intervalId);
+        this.state.intervalId = undefined;
+      }
+
+      // Restart with new speed
+      this.startMainLoop();
+    }
   }
 
   /**
@@ -396,11 +442,11 @@ export class SimulationEngine {
     const deviceState = this.state.deviceStates.get(deviceId);
     if (!deviceState) return;
 
-    // Check if device data production is enabled
-    if (!device.dataProduction?.enabled) return;
+    // Check if device data production is explicitly disabled
+    if (device.dataProduction?.enabled === false) return;
 
     const now = Date.now();
-    const publishInterval = device.dataProduction.frequency || 1000;
+    const publishInterval = device.dataProduction?.frequency || 1000;
 
     if (now - deviceState.lastPublish >= publishInterval / this.speedMultiplier) {
       this.publishDeviceData(node, device, currentTime);
