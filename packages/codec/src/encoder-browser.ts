@@ -15,8 +15,21 @@ export function encodePayload(
   // Helper to convert BigInt to a format protobufjs understands
   const convertBigInt = (value: any) => {
     if (typeof value === 'bigint') {
-      // Use fromBigInt if available, otherwise fromString
       const Long = protobuf.util.Long as any;
+
+      // Check if Long is available
+      if (!Long) {
+        // Fallback: create a simple Long-like object
+        const longValue = value.toString();
+        return {
+          low: Number(value & BigInt(0xFFFFFFFF)),
+          high: Number((value >> BigInt(32)) & BigInt(0xFFFFFFFF)),
+          unsigned: value >= BigInt(0),
+          toString: () => longValue,
+        };
+      }
+
+      // Use fromBigInt if available, otherwise fromString
       return Long.fromBigInt ? Long.fromBigInt(value) : Long.fromString(value.toString());
     }
     return value;
