@@ -157,7 +157,63 @@ export class SimulationEngine {
   }
 
   /**
-   * Stop the simulation
+   * Pause the simulation (without sending death certificates)
+   */
+  pause(): void {
+    console.log('\n⏸️  Pausing simulation engine...');
+
+    if (this.state.intervalId) {
+      clearInterval(this.state.intervalId);
+      this.state.intervalId = undefined;
+    }
+
+    const uptime = this.state.startTime ? (Date.now() - this.state.startTime) / 1000 : 0;
+
+    console.log(`\n✅ Simulation paused`);
+    console.log(`   Total Messages Published: ${this.state.messageCount}`);
+    console.log(`   Total Uptime: ${Math.floor(uptime)}s\n`);
+
+    // Synchronize final stats to UI
+    if (this.currentStatsCallback) {
+      this.currentStatsCallback({
+        messagesPublished: this.state.messageCount,
+        messagesPerSecond: 0,
+        uptime,
+      });
+    }
+
+    // Note: Do NOT clear nodeStates, deviceStates, or currentNodes
+    // We keep them to resume later
+  }
+
+  /**
+   * Resume the simulation (without sending birth certificates again)
+   */
+  resume(): void {
+    console.log('\n▶️  Resuming simulation engine...');
+
+    if (!this.currentNodes || !this.currentStatsCallback) {
+      console.warn('⚠️  Cannot resume - no previous simulation state');
+      return;
+    }
+
+    if (this.state.intervalId) {
+      console.warn('⚠️  Simulation already running');
+      return;
+    }
+
+    // Update start time to account for pause duration
+    const pauseDuration = this.state.startTime ? (Date.now() - this.state.startTime) / 1000 : 0;
+    this.state.startTime = Date.now() - (pauseDuration * 1000);
+
+    // Restart the main loop
+    this.startMainLoop();
+
+    console.log(`\n✅ Simulation resumed\n`);
+  }
+
+  /**
+   * Stop the simulation (with death certificates)
    */
   stop(nodes: Map<string, SimulatedEoN>): void {
     console.log('\n🛑 Stopping simulation engine...');
@@ -169,9 +225,9 @@ export class SimulationEngine {
 
     let deathMsgCount = 0;
 
-    // Publish death certificates for all running nodes and devices
+    // Publish death certificates for all running or paused nodes and devices
     for (const [, node] of nodes) {
-      if (node.state === 'running') {
+      if (node.state === 'running' || node.state === 'paused') {
         console.log(`\n💀 Publishing death certificates for: ${node.config.groupId}/${node.config.edgeNodeId}`);
 
         // Publish DDEATH for all devices first
@@ -208,6 +264,39 @@ export class SimulationEngine {
     this.state.deviceStates.clear();
     this.currentNodes = null;
     this.currentStatsCallback = null;
+  }
+
+  /**
+   * Reset the simulation engine state
+   */
+  reset(): void {
+    console.log('\n🔄 Resetting simulation engine...');
+
+    // Clear interval if running
+    if (this.state.intervalId) {
+      clearInterval(this.state.intervalId);
+      this.state.intervalId = undefined;
+    }
+
+    // Reset all state
+    this.state.nodeStates.clear();
+    this.state.deviceStates.clear();
+    this.state.messageCount = 0;
+    this.state.lastMessageCount = 0;
+    this.state.lastStatsUpdate = Date.now();
+    this.state.startTime = undefined;
+
+    this.currentNodes = null;
+    this.currentStatsCallback = null;
+
+    console.log('✅ Simulation engine reset complete\n');
+  }
+
+  /**
+   * Check if simulation is currently running
+   */
+  isRunning(): boolean {
+    return this.state.intervalId !== undefined;
   }
 
   /**
