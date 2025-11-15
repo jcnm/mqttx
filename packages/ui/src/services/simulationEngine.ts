@@ -607,7 +607,11 @@ export class SimulationEngine {
 
     // Setup message handler
     this.mqttClient.on('message', (topic, payload) => {
-      this.handleCommand(topic, payload);
+      // Only handle NCMD and DCMD messages (commands)
+      // Ignore BIRTH, DEATH, and DATA messages
+      if (topic.includes('/NCMD/') || topic.includes('/DCMD/')) {
+        this.handleCommand(topic, payload);
+      }
     });
 
     console.log('✅ Command subscriptions complete\n');
