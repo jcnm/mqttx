@@ -4,6 +4,61 @@
 
 Le système de persistance des simulations permet de **sauvegarder et recharger** des configurations complètes de simulation Sparkplug B, incluant l'état critique `bdSeq` et `seq` pour chaque node et device.
 
+## 🔧 Backends de Stockage Disponibles
+
+Le système supporte **trois backends de stockage** différents, permettant de choisir la meilleure option selon les besoins :
+
+### 1. 💾 LocalStorage (Browser)
+- **Stockage** : Navigateur web local
+- **Capacité** : ~5-10 MB
+- **Persistance** : Par utilisateur/navigateur
+- **Partage** : Non partageable
+- **Idéal pour** : Tests locaux, développement rapide
+- **Disponibilité** : Toujours disponible
+
+### 2. 🔴 Redis (Server)
+- **Stockage** : Serveur Redis
+- **Capacité** : Illimitée (dépend du serveur)
+- **Persistance** : Partagée entre tous les utilisateurs
+- **Partage** : Multi-utilisateurs
+- **Idéal pour** : Production, collaboration en équipe
+- **Disponibilité** : Nécessite Redis configuré
+- **TTL** : 90 jours par défaut
+
+### 3. 📁 Fichier (Server)
+- **Stockage** : Système de fichiers serveur (`./data/simulations/`)
+- **Capacité** : Illimitée (dépend du disque)
+- **Persistance** : Permanente
+- **Partage** : Multi-utilisateurs
+- **Idéal pour** : Archivage, versioning Git, backup
+- **Disponibilité** : Toujours disponible (côté serveur)
+- **Format** : Fichiers JSON lisibles
+
+### Changement de Backend
+
+Le backend peut être changé à tout moment via l'interface SimulationManager :
+
+```typescript
+// Via l'interface
+// Sélecteur dropdown dans la barre de statistiques
+
+// Via code
+import { persistenceManager } from './services/persistence/SimulationPersistenceManager';
+
+// Changer de backend
+await persistenceManager.switchBackend('redis');
+
+// Vérifier disponibilité
+const available = await persistenceManager.isBackendAvailable('redis');
+
+// Copier une simulation vers un autre backend
+const newId = await persistenceManager.copyToBackend('sim_123', 'file');
+
+// Synchroniser toutes les simulations vers un autre backend
+const count = await persistenceManager.syncToBackend('file');
+console.log(`${count} simulations synchronisées`);
+```
+
 ## ⚡ Conformité Sparkplug B
 
 ### État Sauvegardé
@@ -58,13 +113,45 @@ seq: 43  // ✅ Incrémente normalement
 
 ## 📂 Structure de Stockage
 
-### LocalStorage Keys
+### LocalStorage Backend
 
 ```
 sparkplug_simulation_metadata        → Index de toutes les simulations
 sparkplug_simulation_{id}            → Snapshot de simulation
 sparkplug_simulation_autosave        → Sauvegarde automatique
+sparkplug_storage_backend_preference → Backend sélectionné
 ```
+
+### Redis Backend
+
+```
+simulation:{id}                      → Snapshot JSON (TTL: 90 jours)
+simulation:metadata                  → Index des simulations
+simulation:autosave                  → Sauvegarde automatique
+```
+
+**API Endpoints** :
+- `GET /api/simulations` - Liste toutes les simulations
+- `GET /api/simulations/:id` - Récupère une simulation
+- `POST /api/simulations` - Sauvegarde une simulation
+- `DELETE /api/simulations/:id` - Supprime une simulation
+- `GET /api/simulations/stats` - Statistiques
+
+### File Backend
+
+```
+./data/simulations/{id}.json         → Fichier JSON de simulation
+./data/simulations/metadata.json     → Index des simulations
+./data/simulations/autosave.json     → Sauvegarde automatique
+```
+
+**API Endpoints** :
+- `GET /api/simulations/file` - Liste toutes les simulations
+- `GET /api/simulations/file/:id` - Récupère une simulation
+- `POST /api/simulations/file` - Sauvegarde une simulation
+- `DELETE /api/simulations/file/:id` - Supprime une simulation
+- `GET /api/simulations/file/stats` - Statistiques
+- `GET /api/simulations/file/health` - Vérification disponibilité
 
 ### Format de Snapshot
 
@@ -106,7 +193,7 @@ sparkplug_simulation_autosave        → Sauvegarde automatique
 ### 1. Sauvegarder une Simulation
 
 ```typescript
-import { SimulationPersistenceService } from './services/simulationPersistence';
+import { persistenceManager } from './services/persistence/SimulationPersistenceManager';
 
 // Dans votre composant
 const simulationEngine = /* votre instance */;
@@ -115,8 +202,8 @@ const nodes = /* Map de nodes */;
 // Récupérer l'état
 const { nodeStates, deviceStates } = simulationEngine.getSimulationState();
 
-// Sauvegarder
-const id = SimulationPersistenceService.saveSimulation(
+// Sauvegarder (utilise le backend actuellement sélectionné)
+const id = await persistenceManager.saveSimulation(
   "Ma Simulation",
   nodes,
   nodeStates,
@@ -130,8 +217,8 @@ console.log(`Simulation sauvegardée avec ID: ${id}`);
 ### 2. Charger une Simulation
 
 ```typescript
-// Charger le snapshot
-const snapshot = SimulationPersistenceService.loadSimulation(id);
+// Charger le snapshot (depuis le backend actuel)
+const snapshot = await persistenceManager.loadSimulation(id);
 
 if (snapshot) {
   // ✅ bdSeq déjà incrémenté automatiquement
@@ -150,7 +237,29 @@ if (snapshot) {
 }
 ```
 
-### 3. Auto-Save
+### 3. Changer de Backend
+
+```typescript
+// Vérifier les backends disponibles
+const backends = await persistenceManager.getAvailableBackends();
+console.log(backends);
+// [
+//   { type: 'localStorage', name: 'localStorage', available: true, current: true },
+//   { type: 'redis', name: 'redis', available: true, current: false },
+//   { type: 'file', name: 'file', available: true, current: false }
+// ]
+
+// Changer de backend
+const success = await persistenceManager.switchBackend('redis');
+if (success) {
+  console.log('✅ Backend changé vers Redis');
+}
+
+// Le backend choisi est sauvegardé dans localStorage
+// Il sera automatiquement réutilisé au prochain chargement de la page
+```
+
+### 4. Auto-Save
 
 Le système inclut une sauvegarde automatique :
 
@@ -158,27 +267,40 @@ Le système inclut une sauvegarde automatique :
 // Toutes les 30 secondes
 setInterval(() => {
   if (simulationRunning) {
-    SimulationPersistenceService.autoSave(nodes, nodeStates, deviceStates);
+    await persistenceManager.autoSave(nodes, nodeStates, deviceStates);
   }
 }, 30000);
 
 // Charger l'auto-save au démarrage
-if (SimulationPersistenceService.hasAutoSave()) {
-  const snapshot = SimulationPersistenceService.loadAutoSave();
+if (await persistenceManager.hasAutoSave()) {
+  const snapshot = await persistenceManager.loadAutoSave();
   // Restaurer...
 }
 ```
 
-### 4. Exporter/Importer
+### 5. Exporter/Importer
 
 ```typescript
 // Exporter vers fichier JSON
-SimulationPersistenceService.exportSimulation(id);
+await persistenceManager.exportSimulation(id);
 // → Télécharge: Ma_Simulation_sim_123.json
 
 // Importer depuis fichier
 const file = /* File object */;
-const newId = await SimulationPersistenceService.importSimulation(file);
+const newId = await persistenceManager.importSimulation(file);
+// La simulation est sauvegardée dans le backend actuel
+```
+
+### 6. Copier entre Backends
+
+```typescript
+// Copier une simulation vers un autre backend
+const newId = await persistenceManager.copyToBackend('sim_123', 'file');
+console.log(`Simulation copiée vers fichier: ${newId}`);
+
+// Synchroniser toutes les simulations vers un backup
+const count = await persistenceManager.syncToBackend('file');
+console.log(`${count} simulations synchronisées vers fichiers`);
 ```
 
 ## 🖥️ Interface Utilisateur
@@ -197,13 +319,24 @@ import { SimulationManager } from './components/simulator/SimulationManager';
 ```
 
 **Fonctionnalités UI** :
-- 📋 Liste de toutes les simulations sauvegardées
+- 🔧 **Sélecteur de backend** : Choisir entre LocalStorage, Redis, ou Fichier
+- 📋 Liste de toutes les simulations sauvegardées (backend actuel)
 - 💾 Sauvegarder la simulation actuelle
 - 📂 Charger une simulation
 - 📤 Exporter en JSON
 - 📥 Importer depuis JSON
 - 🗑️ Supprimer une simulation
-- 📊 Statistiques de stockage
+- 📊 Statistiques de stockage (par backend)
+- ✅ Indicateur de backend disponible/actif
+- 🟢 Indicateur d'auto-save
+
+**Sélecteur de Backend** :
+Dans la barre de statistiques, un menu déroulant permet de choisir le backend de stockage :
+- 💾 LocalStorage (navigateur)
+- 🔴 Redis (serveur partagé)
+- 📁 Fichier (serveur permanent)
+
+Le backend sélectionné est sauvegardé localement et utilisé pour toutes les opérations futures.
 
 ## 📊 Exemple Complet
 
@@ -267,9 +400,20 @@ Lors du chargement, des logs détaillés sont affichés :
 
 ## ⚠️ Limitations
 
-### Stockage LocalStorage
+### Stockage LocalStorage Backend
 - **Limite** : ~5-10 MB selon le navigateur
-- **Conseil** : Exporter les simulations volumineuses en JSON
+- **Conseil** : Utiliser Redis ou Fichier pour les simulations volumineuses
+- **Portée** : Par navigateur/utilisateur (non partageable)
+
+### Redis Backend
+- **TTL** : 90 jours par défaut (configurable)
+- **Disponibilité** : Nécessite Redis configuré et démarré
+- **Connexion** : Dépend de la disponibilité réseau
+
+### File Backend
+- **Permissions** : Nécessite accès en écriture au serveur
+- **Espace disque** : Dépend du serveur
+- **Accès** : Partagé entre tous les utilisateurs
 
 ### État Non Sauvegardé
 - ❌ Connexions MQTT actives (doivent être recréées)
@@ -282,6 +426,11 @@ Les `BigInt` sont convertis en `string` pour JSON :
 bdSeq: BigInt(5)     → "5"
 bdSeq: "5"           → BigInt(5)
 ```
+
+### Changement de Backend
+- Les simulations ne sont **pas automatiquement synchronisées** entre backends
+- Utiliser `copyToBackend()` ou `syncToBackend()` pour transférer les données
+- Chaque backend a son propre stockage indépendant
 
 ## 🚀 Avantages
 
@@ -337,34 +486,88 @@ console.log(`Current bdSeq: ${node.bdSeq}`);
 
 ## 🔧 API Reference
 
-### SimulationPersistenceService
+### SimulationPersistenceManager
 
-#### `saveSimulation(name, nodes, nodeStates, deviceStates, description?): string`
-Sauvegarde une simulation et retourne son ID.
+#### Backend Management
 
-#### `loadSimulation(id): SimulationSnapshot | null`
-Charge une simulation (bdSeq auto-incrémenté).
+##### `getCurrentBackend(): StorageBackend`
+Retourne le backend actuellement utilisé.
 
-#### `getAllSimulations(): SimulationMetadata[]`
-Liste toutes les simulations.
+##### `getCurrentBackendType(): StorageBackendType`
+Retourne le type du backend actuel ('localStorage' | 'redis' | 'file').
 
-#### `deleteSimulation(id): boolean`
-Supprime une simulation.
+##### `switchBackend(type: StorageBackendType): Promise<boolean>`
+Change le backend de stockage. Retourne `true` si le changement a réussi.
 
-#### `exportSimulation(id): void`
-Exporte en fichier JSON.
+##### `isBackendAvailable(type: StorageBackendType): Promise<boolean>`
+Vérifie si un backend est disponible.
 
-#### `importSimulation(file): Promise<string>`
-Importe depuis fichier JSON.
+##### `getAvailableBackends(): Promise<Array<{ type, name, available, current }>>`
+Liste tous les backends avec leur statut de disponibilité.
 
-#### `autoSave(nodes, nodeStates, deviceStates): void`
-Sauvegarde automatique.
+#### Simulation Operations
 
-#### `hasAutoSave(): boolean`
-Vérifie si auto-save existe.
+##### `saveSimulation(name, nodes, nodeStates, deviceStates, description?): Promise<string>`
+Sauvegarde une simulation dans le backend actuel et retourne son ID.
 
-#### `getStorageStats(): { totalSimulations, totalSize, sizeFormatted }`
-Statistiques de stockage.
+##### `loadSimulation(id): Promise<SimulationSnapshot | null>`
+Charge une simulation depuis le backend actuel (bdSeq auto-incrémenté).
+
+##### `getAllSimulations(): Promise<SimulationMetadata[]>`
+Liste toutes les simulations du backend actuel.
+
+##### `deleteSimulation(id): Promise<boolean>`
+Supprime une simulation du backend actuel.
+
+##### `getStats(): Promise<{ totalSimulations, totalSize, sizeFormatted }>`
+Statistiques de stockage du backend actuel.
+
+#### Import/Export
+
+##### `exportSimulation(id): Promise<void>`
+Exporte une simulation en fichier JSON (téléchargement navigateur).
+
+##### `importSimulation(file): Promise<string | null>`
+Importe une simulation depuis un fichier JSON vers le backend actuel.
+
+#### Auto-Save
+
+##### `autoSave(nodes, nodeStates, deviceStates): Promise<void>`
+Sauvegarde automatique dans le backend actuel.
+
+##### `hasAutoSave(): Promise<boolean>`
+Vérifie si un auto-save existe dans le backend actuel.
+
+##### `loadAutoSave(): Promise<SimulationSnapshot | null>`
+Charge l'auto-save depuis le backend actuel.
+
+#### Cross-Backend Operations
+
+##### `copyToBackend(id, targetBackend): Promise<string | null>`
+Copie une simulation vers un autre backend. Retourne le nouvel ID.
+
+##### `syncToBackend(targetBackend): Promise<number>`
+Synchronise toutes les simulations vers un autre backend. Retourne le nombre de simulations synchronisées.
+
+##### `clearAll(): Promise<void>`
+Supprime toutes les simulations du backend actuel.
+
+### StorageBackend Interface
+
+Tous les backends implémentent cette interface :
+
+```typescript
+interface StorageBackend {
+  readonly name: string;
+  isAvailable(): Promise<boolean>;
+  save(snapshot: SimulationSnapshot): Promise<void>;
+  load(id: string): Promise<SimulationSnapshot | null>;
+  list(): Promise<SimulationMetadata[]>;
+  delete(id: string): Promise<boolean>;
+  getStats(): Promise<{ totalSimulations, totalSize, sizeFormatted }>;
+  clearAll(): Promise<void>;
+}
+```
 
 ## 🎓 Conformité Spec Sparkplug B
 
@@ -395,5 +598,20 @@ Pour toute question sur la persistance des simulations :
 ---
 
 **Dernière mise à jour** : 2025-11-15
-**Version** : 1.0.0
+**Version** : 2.0.0 (Multi-Backend)
 **Conformité** : Sparkplug B (ISO/IEC 20237:2023)
+
+## 📦 Architecture Multi-Backend
+
+Le système utilise une architecture modulaire avec :
+- **Interface abstraite** : `StorageBackend` définit le contrat
+- **Implémentations concrètes** : `LocalStorageBackend`, `RedisBackend`, `FileBackend`
+- **Manager centralisé** : `SimulationPersistenceManager` orchestre tout
+- **Singleton** : `persistenceManager` pour un accès global
+
+**Avantages** :
+- ✅ Changement de backend à chaud
+- ✅ Ajout facile de nouveaux backends
+- ✅ Tests unitaires simplifiés
+- ✅ Séparation des préoccupations
+- ✅ Synchronisation inter-backends

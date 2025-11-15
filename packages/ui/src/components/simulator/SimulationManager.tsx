@@ -5,7 +5,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { SimulationPersistenceService, type SimulationMetadata } from '../../services/simulationPersistence';
+import { persistenceManager } from '../../services/persistence/SimulationPersistenceManager';
+import type { SimulationMetadata, StorageBackendType } from '../../services/persistence/types';
 import { format } from 'date-fns';
 
 interface SimulationManagerProps {
@@ -22,15 +23,41 @@ export function SimulationManager({ onClose, onLoad, onSave, canSave }: Simulati
   const [saveName, setSaveName] = useState('');
   const [saveDescription, setSaveDescription] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [currentBackend, setCurrentBackend] = useState<StorageBackendType>(persistenceManager.getCurrentBackendType());
+  const [availableBackends, setAvailableBackends] = useState<StorageBackendType[]>([]);
 
-  // Load simulations list
+  // Load simulations list and check available backends
   useEffect(() => {
     loadSimulations();
+    checkAvailableBackends();
   }, []);
 
-  const loadSimulations = () => {
-    const sims = SimulationPersistenceService.getAllSimulations();
+  const checkAvailableBackends = async () => {
+    const available: StorageBackendType[] = [];
+    const backends: StorageBackendType[] = ['localStorage', 'redis', 'file'];
+
+    for (const backend of backends) {
+      if (await persistenceManager.isBackendAvailable(backend)) {
+        available.push(backend);
+      }
+    }
+
+    setAvailableBackends(available);
+  };
+
+  const loadSimulations = async () => {
+    const sims = await persistenceManager.getAllSimulations();
     setSimulations(sims.sort((a, b) => b.lastModified - a.lastModified));
+  };
+
+  const handleBackendSwitch = async (backend: StorageBackendType) => {
+    const success = await persistenceManager.switchBackend(backend);
+    if (success) {
+      setCurrentBackend(backend);
+      await loadSimulations();
+    } else {
+      alert(`Backend ${backend} n'est pas disponible`);
+    }
   };
 
   const handleSave = () => {
@@ -51,14 +78,14 @@ export function SimulationManager({ onClose, onLoad, onSave, canSave }: Simulati
     onClose();
   };
 
-  const handleDelete = (id: string) => {
-    SimulationPersistenceService.deleteSimulation(id);
+  const handleDelete = async (id: string) => {
+    await persistenceManager.deleteSimulation(id);
     setShowDeleteConfirm(null);
-    loadSimulations();
+    await loadSimulations();
   };
 
-  const handleExport = (id: string) => {
-    SimulationPersistenceService.exportSimulation(id);
+  const handleExport = async (id: string) => {
+    await persistenceManager.exportSimulation(id);
   };
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,8 +93,8 @@ export function SimulationManager({ onClose, onLoad, onSave, canSave }: Simulati
     if (!file) return;
 
     try {
-      await SimulationPersistenceService.importSimulation(file);
-      loadSimulations();
+      await persistenceManager.importSimulation(file);
+      await loadSimulations();
       alert('Simulation importée avec succès!');
     } catch (error) {
       alert('Erreur lors de l\'importation: ' + error);
@@ -77,8 +104,18 @@ export function SimulationManager({ onClose, onLoad, onSave, canSave }: Simulati
     event.target.value = '';
   };
 
-  const stats = SimulationPersistenceService.getStorageStats();
-  const hasAutoSave = SimulationPersistenceService.hasAutoSave();
+  const [stats, setStats] = useState({ totalSimulations: 0, totalSize: 0, sizeFormatted: '0 KB' });
+  const [hasAutoSave, setHasAutoSave] = useState(false);
+
+  useEffect(() => {
+    const loadStats = async () => {
+      const s = await persistenceManager.getStats();
+      setStats(s);
+      const autoSave = await persistenceManager.hasAutoSave();
+      setHasAutoSave(autoSave);
+    };
+    loadStats();
+  }, [simulations]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -104,6 +141,20 @@ export function SimulationManager({ onClose, onLoad, onSave, canSave }: Simulati
         {/* Stats Bar */}
         <div className="px-6 py-3 bg-slate-850 border-b border-slate-700 flex items-center justify-between text-sm">
           <div className="flex items-center gap-6">
+            <div>
+              <span className="text-slate-400">Backend: </span>
+              <select
+                value={currentBackend}
+                onChange={(e) => handleBackendSwitch(e.target.value as StorageBackendType)}
+                className="bg-slate-700 text-white px-2 py-1 rounded border border-slate-600 font-semibold text-xs"
+              >
+                {availableBackends.map((backend) => (
+                  <option key={backend} value={backend}>
+                    {backend === 'localStorage' ? '💾 LocalStorage' : backend === 'redis' ? '🔴 Redis' : '📁 Fichier'}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <span className="text-slate-400">Simulations: </span>
               <span className="text-white font-semibold">{stats.totalSimulations}</span>

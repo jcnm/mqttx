@@ -12,6 +12,7 @@ import { SparkplugBroker } from './mqtt/broker.js';
 import { SCADAHistoryService } from './services/scada-history.js';
 import { HistoryListener } from './services/history-listener.js';
 import { CommandService } from './services/command-service.js';
+import { registerSimulationRoutes } from './routes/simulations.js';
 import type { Redis } from 'ioredis';
 
 export interface ServerOptions {
@@ -66,6 +67,10 @@ export async function createServer(options: ServerOptions) {
   // Initialize Command Service
   const commandService = new CommandService(options.broker);
   console.log('✅ SCADA command service initialized');
+
+  // Register simulation persistence routes
+  await registerSimulationRoutes(fastify, options.redis || null);
+  console.log('✅ Simulation persistence routes registered');
 
   // Health check
   fastify.get('/health', async () => {
