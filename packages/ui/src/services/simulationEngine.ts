@@ -792,16 +792,24 @@ export class SimulationEngine {
 
   /**
    * Publish NDATA message
+   * Sparkplug B Optimization: Only sends metrics that have changed since last publication
    */
   private publishNodeData(node: SimulatedEoN, currentTime: number): void {
     if (!this.mqttClient || !this.mqttClient.connected) return;
 
     const topic = `spBv1.0/${node.config.groupId}/NDATA/${node.config.edgeNodeId}`;
 
+    // Priority 3: Use change detection to only send changed metrics
+    const metrics = this.buildMetrics(node.metrics || [], currentTime, false, node.id, true);
+
+    // Skip publishing if no metrics have changed (optimization)
+    if (metrics.length === 0) {
+      return;
+    }
+
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
-      // Priority 3: Pass isBirth=false and entityId for alias optimization & history
-      metrics: this.buildMetrics(node.metrics || [], currentTime, false, node.id),
+      metrics,
       seq: BigInt(this.incrementSeq(node.id)),
     };
 
@@ -898,16 +906,24 @@ export class SimulationEngine {
 
   /**
    * Publish DDATA message
+   * Sparkplug B Optimization: Only sends metrics that have changed since last publication
    */
   private publishDeviceData(node: SimulatedEoN, device: any, currentTime: number): void {
     if (!this.mqttClient || !this.mqttClient.connected) return;
 
     const topic = `spBv1.0/${node.config.groupId}/DDATA/${node.config.edgeNodeId}/${device.deviceId}`;
 
+    // Priority 3: Use change detection to only send changed metrics
+    const metrics = this.buildMetrics(device.metrics || [], currentTime, false, device.id, true);
+
+    // Skip publishing if no metrics have changed (optimization)
+    if (metrics.length === 0) {
+      return;
+    }
+
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
-      // Priority 3: Pass isBirth=false and entityId for alias optimization & history
-      metrics: this.buildMetrics(device.metrics || [], currentTime, false, device.id),
+      metrics,
       seq: BigInt(this.incrementDeviceSeq(device.id)),
     };
 
@@ -1169,25 +1185,52 @@ export class SimulationEngine {
   }
 
   /**
+   * Compare two values for equality (handles primitives, BigInt, and objects)
+   */
+  private valuesAreEqual(a: any, b: any): boolean {
+    // Handle BigInt comparison
+    if (typeof a === 'bigint' && typeof b === 'bigint') {
+      return a === b;
+    }
+
+    // Handle primitive types
+    if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) {
+      return a === b;
+    }
+
+    // For objects/arrays, use JSON comparison (simple but effective for metric values)
+    try {
+      return JSON.stringify(a) === JSON.stringify(b);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Build metrics array from definitions
    * Returns strongly-typed SparkplugMetric array
    *
    * Priority 3 Features:
    * - Alias-only optimization: In DATA messages, use only alias (omit name) to reduce payload size
    * - Metric history tracking: Track historical values for analysis
+   * - Change detection: Only include changed metrics when changedOnly=true (for DATA messages)
    *
    * @param metricDefs - Metric definitions to build from
    * @param currentTime - Current simulation time
    * @param isBirth - Whether this is a BIRTH message (affects alias optimization)
    * @param entityId - Entity ID for history tracking (nodeId or deviceId)
+   * @param changedOnly - Only include metrics that have changed since last publication
    */
   private buildMetrics(
     metricDefs: MetricDefinition[],
     currentTime: number,
     isBirth: boolean = false,
-    entityId?: string
+    entityId?: string,
+    changedOnly: boolean = false
   ): SparkplugMetric[] {
-    return metricDefs.map((metricDef) => {
+    const metrics: SparkplugMetric[] = [];
+
+    for (const metricDef of metricDefs) {
       let value: any;
 
       if (metricDef.logic) {
@@ -1214,6 +1257,23 @@ export class SimulationEngine {
       if (value === null || value === undefined) {
         console.warn(`⚠️  Metric "${metricDef.name}" has null/undefined value, using default for datatype ${metricDef.datatype}`);
         value = this.getDefaultValueForDatatype(metricDef.datatype);
+      }
+
+      // Change detection optimization for DATA messages
+      if (changedOnly && entityId && metricDef.name) {
+        const historyKey = `${entityId}:${metricDef.name}`;
+        const history = this.state.metricHistory.get(historyKey);
+
+        // If we have history, check if value has changed
+        if (history && history.length > 0) {
+          const lastValue = history[history.length - 1].value;
+
+          // Skip this metric if value hasn't changed
+          // Use deep equality for objects/arrays, strict equality for primitives
+          if (this.valuesAreEqual(lastValue, value)) {
+            continue; // Skip unchanged metric
+          }
+        }
       }
 
       // Priority 3: Track metric history
@@ -1263,8 +1323,10 @@ export class SimulationEngine {
         }
       }
 
-      return metric;
-    });
+      metrics.push(metric);
+    }
+
+    return metrics;
   }
 
   /**
