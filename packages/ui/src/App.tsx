@@ -8,6 +8,7 @@ import { Header } from './components/layout/Header';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { LoginPage } from './components/auth/LoginPage';
 import { initBrokerWebSocket, cleanupBrokerWebSocket } from './services/brokerWebSocket';
+import { simulationService } from './services/simulationService';
 
 // Components
 import { SCADAView } from './components/scada/SCADAView';
@@ -16,7 +17,7 @@ import { PlantSimulatorNew } from './components/simulator/PlantSimulatorNew';
 import { CommandPanel } from './components/commands/CommandPanel';
 
 function App() {
-  const { connect, disconnect, isConnected, setOnMessage } = useMQTTStore();
+  const { client, connect, disconnect, isConnected, setOnMessage } = useMQTTStore();
   const { addLog } = useBrokerStore();
   const { getBrokerUrl } = useSettingsStore();
   const { user, checkAuth } = useAuthStore();
@@ -49,8 +50,18 @@ function App() {
     return () => {
       disconnect();
       cleanupBrokerWebSocket();
+      // Note: We do NOT destroy simulationService here because we want
+      // the simulation to persist across route changes
     };
   }, [user, connect, disconnect, setOnMessage, addLog, getBrokerUrl]);
+
+  // Initialize simulation service when MQTT client is available
+  useEffect(() => {
+    if (client && user && !simulationService.isReady()) {
+      console.log('🎮 Initializing Simulation Service with MQTT client');
+      simulationService.initialize(client, 1);
+    }
+  }, [client, user]);
 
   // Wait for auth check to complete
   if (!authChecked) {

@@ -7,11 +7,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { useBrokerStore } from '../../stores/brokerStore';
+import { useMessageTraceStore } from '../../stores/messageTraceStore';
 import { useMQTTStore } from '../../stores/mqttStore';
 import { encodePayload } from '@sparkplug/codec';
 import { MessageDetailPopover } from '../common/MessageDetailPopover';
+import { MessageTraceInspector } from './MessageTraceInspector';
 import type { SimulatedEoN, MetricDefinition } from '../../types/simulator.types';
 import type { BrokerLog } from '../../types/broker.types';
+import type { MessageTrace } from '../../types/message-trace.types';
 
 interface EoNTraceViewProps {
   node: SimulatedEoN;
@@ -22,6 +25,7 @@ type MessageDirection = 'sent' | 'received' | 'all';
 
 export function EoNTraceView({ node, onClose }: EoNTraceViewProps) {
   const { logs } = useBrokerStore();
+  const { traces } = useMessageTraceStore();
   const { client: mqttClient } = useMQTTStore();
 
   const [filter, setFilter] = useState<MessageDirection>('all');
@@ -30,6 +34,8 @@ export function EoNTraceView({ node, onClose }: EoNTraceViewProps) {
   const [sending, setSending] = useState(false);
   const [selectedLog, setSelectedLog] = useState<BrokerLog | null>(null);
   const [selectedMessageNumber, setSelectedMessageNumber] = useState<number | undefined>();
+  const [selectedTrace, setSelectedTrace] = useState<MessageTrace | null>(null);
+  const [viewMode, setViewMode] = useState<'traces' | 'broker'>('traces');
 
   // Helper to extract message type from topic
   const extractMessageType = (topic: string): string | null => {
@@ -69,8 +75,51 @@ export function EoNTraceView({ node, onClose }: EoNTraceViewProps) {
     });
   }, [logs, node.config.groupId, node.config.edgeNodeId, filter]);
 
-  // Calculate statistics
+  // Filter message traces for this specific EoN node
+  const nodeTraces = useMemo(() => {
+    const groupId = node.config.groupId;
+    const edgeNodeId = node.config.edgeNodeId;
+
+    return traces.filter((trace) => {
+      // Match group and edge node
+      if (trace.groupId !== groupId || trace.edgeNodeId !== edgeNodeId) return false;
+
+      // Apply direction filter
+      if (filter === 'sent') {
+        // Sent messages: NBIRTH, NDEATH, NDATA, DBIRTH, DDEATH, DDATA
+        return ['NBIRTH', 'NDEATH', 'NDATA', 'DBIRTH', 'DDEATH', 'DDATA'].includes(trace.messageType);
+      } else if (filter === 'received') {
+        // Received messages: NCMD, DCMD
+        return ['NCMD', 'DCMD'].includes(trace.messageType);
+      }
+
+      return true; // 'all' filter
+    });
+  }, [traces, node.config.groupId, node.config.edgeNodeId, filter]);
+
+  // Calculate statistics (use traces when in trace mode, logs when in broker mode)
   const stats = useMemo(() => {
+    const dataSource = viewMode === 'traces' ? nodeTraces : nodeLogs;
+
+    const sent = dataSource.filter((item) => {
+      const messageType = 'messageType' in item ? item.messageType : (item.topic ? extractMessageType(item.topic) : null);
+      return messageType && ['NBIRTH', 'NDEATH', 'NDATA', 'DBIRTH', 'DDEATH', 'DDATA'].includes(messageType);
+    }).length;
+    const received = dataSource.filter((item) => {
+      const messageType = 'messageType' in item ? item.messageType : (item.topic ? extractMessageType(item.topic) : null);
+      return messageType && ['NCMD', 'DCMD'].includes(messageType);
+    }).length;
+
+    // Calculate messages per second (last 60 seconds)
+    const oneMinuteAgo = Date.now() - 60000;
+    const recentMessages = dataSource.filter((item) => item.timestamp > oneMinuteAgo);
+    const messagesPerSecond = (recentMessages.length / 60).toFixed(2);
+
+    return { sent, received, total: dataSource.length, messagesPerSecond };
+  }, [nodeTraces, nodeLogs, viewMode]);
+
+  // Original stats calculation
+  const _oldStats = useMemo(() => {
     const sent = nodeLogs.filter((log) => {
       const messageType = log.messageType || (log.topic ? extractMessageType(log.topic) : null);
       return messageType && ['NBIRTH', 'NDEATH', 'NDATA', 'DBIRTH', 'DDEATH', 'DDATA'].includes(messageType);

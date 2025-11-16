@@ -7,12 +7,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSimulatorStore } from '../../stores/simulatorStore';
 import { useMQTTStore } from '../../stores/mqttStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useMessageTraceStore } from '../../stores/messageTraceStore';
 import { EnhancedReactFlowCanvas } from './EnhancedReactFlowCanvas';
 import { SimulatorControls } from './SimulatorControls';
 import { ConfigPanel } from './ConfigPanel';
 import { EoNTraceView } from './EoNTraceView';
 import { ToolPanel } from './ToolPanel';
-import { createSimulationEngine } from '../../services/simulationEngine';
+import { simulationService } from '../../services/simulationService';
 import type {
   SimulatedEoN,
   SimulatedDevice,
@@ -43,6 +44,7 @@ export function PlantSimulatorNew() {
 
   const { client: mqttClient, isConnected } = useMQTTStore();
   const { simulatorDefaults } = useSettingsStore();
+  const { addTrace } = useMessageTraceStore();
 
   // UI State
   const [toolPanelOpen, setToolPanelOpen] = useState(true);
@@ -50,22 +52,35 @@ export function PlantSimulatorNew() {
   const [reactFlowNodes, setReactFlowNodes, onNodesChange] = useNodesState<Node>([]);
   const [reactFlowEdges, setReactFlowEdges, onEdgesChange] = useEdgesState([]);
 
-  const simulationEngineRef = useRef<ReturnType<typeof createSimulationEngine> | null>(null);
   const prevStatsRef = useRef(stats);
 
-  // Initialize simulation engine
-  useEffect(() => {
-    if (mqttClient) {
-      simulationEngineRef.current = createSimulationEngine(mqttClient, speed);
-    }
-  }, [mqttClient, speed]);
+  // Use the persistent simulation service instead of creating a new engine
+  // The service is initialized in App.tsx and persists across route changes
+  const simulationEngine = simulationService.getEngine();
 
-  // Update engine speed
+  // Update engine speed when changed
   useEffect(() => {
-    if (simulationEngineRef.current) {
-      simulationEngineRef.current.setSpeed(speed);
-    }
+    simulationService.setSpeed(speed);
   }, [speed]);
+
+  // Set stats callback for this component
+  useEffect(() => {
+    simulationService.setStatsCallback((engineStats) => {
+      updateStats(engineStats);
+    });
+  }, [updateStats]);
+
+  // Set message trace callback for detailed message inspection
+  useEffect(() => {
+    simulationService.setMessageTraceCallback((trace) => {
+      addTrace(trace);
+    });
+
+    // Cleanup - remove callback when component unmounts
+    return () => {
+      simulationService.setMessageTraceCallback(null);
+    };
+  }, [addTrace]);
 
   // Detect reset and clean engine state
   useEffect(() => {
@@ -78,22 +93,29 @@ export function PlantSimulatorNew() {
       currentStats.messagesPublished === 0 &&
       currentStats.uptime === 0;
 
-    if (wasReset && simulationEngineRef.current) {
+    if (wasReset && simulationEngine) {
       console.log('🔄 Reset detected - resetting simulation engine');
-      simulationEngineRef.current.reset();
+      simulationService.reset();
     }
 
     prevStatsRef.current = currentStats;
-  }, [stats]);
+  }, [stats, simulationEngine]);
 
   // Control simulation based on isRunning state
   useEffect(() => {
-    if (!simulationEngineRef.current) {
+    if (!simulationEngine) {
       console.error('❌ Simulation engine not initialized!');
       return;
     }
 
-    console.log('🎮 Simulation control - isRunning:', isRunning, 'engine.isRunning():', simulationEngineRef.current.isRunning());
+    // Get the stats callback from the service
+    const statsCallback = simulationService.getStatsCallback();
+    if (!statsCallback) {
+      console.error('❌ Stats callback not set!');
+      return;
+    }
+
+    console.log('🎮 Simulation control - isRunning:', isRunning, 'engine.isRunning():', simulationEngine.isRunning());
 
     if (isRunning) {
       // START or RESUME
@@ -101,51 +123,44 @@ export function PlantSimulatorNew() {
 
       if (hasPausedNodes) {
         console.log('▶️  RESUME simulation');
-        simulationEngineRef.current.resume();
+        simulationEngine.resume();
       } else {
         console.log('🚀 START simulation');
-        simulationEngineRef.current.start(storeNodes, (engineStats) => {
-          updateStats(engineStats);
-        });
+        simulationEngine.start(storeNodes, statsCallback);
       }
     } else {
       // STOP or PAUSE
-      if (simulationEngineRef.current.isRunning()) {
+      if (simulationEngine.isRunning()) {
         const hasPausedNodes = Array.from(storeNodes.values()).some(n => n.state === 'paused');
 
         if (hasPausedNodes) {
           console.log('⏸️  PAUSE simulation');
-          simulationEngineRef.current.pause();
+          simulationEngine.pause();
         } else {
           console.log('🛑 STOP simulation');
-          simulationEngineRef.current.stop(storeNodes);
+          simulationEngine.stop(storeNodes);
         }
       }
     }
-  }, [isRunning]);
+  }, [isRunning, simulationEngine, storeNodes]);
 
   // Handle nodes changes during running simulation
   useEffect(() => {
-    if (!simulationEngineRef.current) return;
+    if (!simulationEngine) return;
     if (!isRunning) return;
-    if (!simulationEngineRef.current.isRunning()) return;
+    if (!simulationEngine.isRunning()) return;
+
+    const statsCallback = simulationService.getStatsCallback();
+    if (!statsCallback) return;
 
     console.log('📝 Nodes changed during simulation - restarting...');
-    simulationEngineRef.current.stop(storeNodes);
-    simulationEngineRef.current.start(storeNodes, (engineStats) => {
-      updateStats(engineStats);
-    });
-  }, [storeNodes]);
+    simulationEngine.stop(storeNodes);
+    simulationEngine.start(storeNodes, statsCallback);
+  }, [storeNodes, simulationEngine, isRunning]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (simulationEngineRef.current && simulationEngineRef.current.isRunning()) {
-        console.log('🧹 Cleanup - stopping simulation');
-        simulationEngineRef.current.stop(storeNodes);
-      }
-    };
-  }, []);
+  // Note: We do NOT cleanup/stop the simulation on unmount anymore!
+  // The simulation engine now persists across route changes via simulationService
+  // This allows the simulation to continue running when navigating to SCADA or Broker views
 
   // Sync store nodes to ReactFlow nodes
   useEffect(() => {

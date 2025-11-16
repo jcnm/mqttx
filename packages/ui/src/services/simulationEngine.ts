@@ -12,6 +12,7 @@ import type {
   PropertySet,
   PropertyValue,
 } from '../types/simulator.types';
+import type { MessageTrace } from '../types/message-trace.types';
 import { generateMetricValue, convertToDatatype, clampValue } from './dataGenerator';
 import { encodePayload, decodePayload } from '@sparkplug/codec';
 
@@ -64,11 +65,20 @@ export class SimulationEngine {
 
   private currentNodes: Map<string, SimulatedEoN> | null = null;
   private currentStatsCallback: ((stats: { messagesPublished: number; messagesPerSecond: number; uptime: number }) => void) | null = null;
+  private messageTraceCallback: ((trace: MessageTrace) => void) | null = null;
+  private messageTraceCounter: number = 0;
 
   constructor(
     private mqttClient: MqttClient | null,
     private speedMultiplier: number = 1
   ) {}
+
+  /**
+   * Set callback for message tracing
+   */
+  public setMessageTraceCallback(callback: ((trace: MessageTrace) => void) | null): void {
+    this.messageTraceCallback = callback;
+  }
 
   /**
    * Generate Will Message configuration for MQTT client
@@ -1358,6 +1368,14 @@ export class SimulationEngine {
     console.log(`   ✅ MQTT client is connected`);
 
     try {
+      // Extract message details from topic
+      const topicParts = topic.split('/');
+      const msgType = topicParts[2]; // NBIRTH, NDATA, DBIRTH, DDATA, etc.
+      const groupId = topicParts[1];
+      const edgeNodeId = topicParts[3];
+      const deviceId = topicParts[4]; // undefined for node messages
+      const metricsCount = payload.metrics?.length || 0;
+
       // Encode payload using Sparkplug B protobuf format
       console.log(`   🔧 Encoding payload...`);
 
@@ -1373,10 +1391,45 @@ export class SimulationEngine {
       // encodePayload returns Uint8Array which works in browser (no Buffer needed)
       console.log(`   ✅ Payload encoded (${encodedPayload.length} bytes)`);
 
-      // Extract message type from topic
-      const topicParts = topic.split('/');
-      const msgType = topicParts[2]; // NBIRTH, NDATA, DBIRTH, DDATA, etc.
-      const metricsCount = payload.metrics?.length || 0;
+      // Get bdSeq if this is a BIRTH or DEATH message
+      let bdSeq: bigint | undefined;
+      const bdSeqMetric = payload.metrics?.find((m) => m.name === 'bdSeq');
+      if (bdSeqMetric && typeof bdSeqMetric.value === 'bigint') {
+        bdSeq = bdSeqMetric.value;
+      }
+
+      // Create message trace if callback is set
+      const traceId = `trace-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const timestamp = Date.now();
+      const messageNumber = ++this.messageTraceCounter;
+
+      const messageTrace: MessageTrace = {
+        id: traceId,
+        timestamp,
+        messageNumber,
+        topic,
+        messageType: msgType as any,
+        qos,
+        groupId,
+        edgeNodeId,
+        deviceId,
+        preEncoding: {
+          payload: JSON.parse(JSON.stringify(payload, (_key, value) => typeof value === 'bigint' ? value.toString() : value)), // Deep clone for display
+          metricCount: metricsCount,
+          seq: payload.seq,
+          timestamp: payload.timestamp,
+          bdSeq,
+        },
+        postEncoding: {
+          encodedPayload: new Uint8Array(encodedPayload), // Copy to avoid reference issues
+          sizeBytes: encodedPayload.length,
+        },
+        transmission: {
+          publishedAt: timestamp,
+          status: 'pending',
+          mqttClientId: (this.mqttClient as any).options?.clientId,
+        },
+      };
 
       console.log(`   📨 Publishing ${msgType} with ${metricsCount} metrics...`);
 
@@ -1385,9 +1438,21 @@ export class SimulationEngine {
         if (error) {
           console.error(`❌ Failed to publish ${msgType}:`, error);
           console.error(`   Topic: ${topic}`);
+
+          // Update trace with error
+          messageTrace.transmission.status = 'error';
+          messageTrace.transmission.error = error.message;
         } else {
           this.state.messageCount++;
           console.log(`✅ PUBLISHED ${msgType} → ${topic} (seq: ${payload.seq}, count: ${this.state.messageCount})`);
+
+          // Update trace with success
+          messageTrace.transmission.status = 'success';
+        }
+
+        // Emit message trace via callback
+        if (this.messageTraceCallback) {
+          this.messageTraceCallback(messageTrace);
         }
       });
     } catch (error) {
