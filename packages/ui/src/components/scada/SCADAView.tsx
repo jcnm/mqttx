@@ -1,12 +1,14 @@
 /**
  * SCADA View Component
  * Real-time monitoring of Edge of Network nodes and devices
+ * Uses SCADA MQTT Service (Sparkplug B Host Application)
  */
 
 import { useEffect, useMemo, useRef, useCallback } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { useSCADAStore } from '../../stores/scadaStore';
-import { useMQTTStore } from '../../stores/mqttStore';
+import { useBrokerStore } from '../../stores/brokerStore';
+import { scadaMqttService } from '../../services/scadaMqttService';
 import { GridView } from './GridView';
 import { TreeView } from './TreeView';
 import { DetailPanel } from './DetailPanel';
@@ -18,7 +20,10 @@ import { useAlarmMonitoring } from '../../hooks/useAlarmMonitoring';
 
 export function SCADAView() {
   const { nodes, devices, viewMode, setViewMode, removeNode, removeDevice, batchUpdate } = useSCADAStore();
-  const { isConnected, messages } = useMQTTStore();
+  const { logs } = useBrokerStore();
+
+  // SCADA connection status
+  const isConnected = scadaMqttService.isClientConnected();
 
   // Enable alarm monitoring
   useAlarmMonitoring();
@@ -37,24 +42,13 @@ export function SCADAView() {
     }
   }, [batchUpdate]);
 
-  // Process incoming MQTT messages and update SCADA store
+  // Process incoming MQTT messages from SCADA service and update SCADA store
   useEffect(() => {
-    const unsubscribe = useMQTTStore.subscribe((state) => {
+    const unsubscribe = useBrokerStore.subscribe((state) => {
       // Process only new messages since last update
-      const newMessages = state.messages.slice(lastProcessedIndex.current);
+      const newLogs = state.logs.slice(lastProcessedIndex.current);
 
-      newMessages.forEach((msg, index) => {
-        const log = {
-          id: `${msg.timestamp}`,
-          timestamp: msg.timestamp,
-          type: 'publish' as const,
-          clientId: 'broker',
-          topic: msg.topic,
-          qos: 0 as const,
-          payload: new Uint8Array(msg.payload),
-          origin: { ip: 'unknown', port: 0 },
-        };
-
+      newLogs.forEach((log, index) => {
         const result = processSparkplugMessage(log);
         if (!result) return;
 
