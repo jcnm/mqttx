@@ -89,17 +89,48 @@ function OverviewTab({ log }: { log: BrokerLog }) {
         <h3 className="text-lg font-semibold text-white mb-4">Message Information</h3>
         <div className="grid grid-cols-2 gap-4">
           <InfoRow label="Timestamp" value={new Date(log.timestamp).toISOString()} />
-          <InfoRow label="Client ID" value={log.clientId} />
+          <InfoRow
+            label="Client ID"
+            value={log.clientId}
+            highlight={log.clientId === 'broker' ? 'orange' : undefined}
+          />
           <InfoRow label="Topic" value={log.topic || 'N/A'} />
           <InfoRow label="Message Type" value={log.messageType || 'Unknown'} />
           <InfoRow label="QoS" value={log.qos?.toString() || '0'} />
           <InfoRow label="Retain" value={log.retain ? 'Yes' : 'No'} />
           <InfoRow label="Payload Size" value={`${log.payload?.length || 0} bytes`} />
-          <InfoRow label="Source" value={`${log.origin.ip}:${log.origin.port}`} />
+          <InfoRow
+            label="Origin"
+            value={log.origin.ip === 'broker' ? 'Broker (auto-published)' : `${log.origin.ip}:${log.origin.port}`}
+            highlight={log.origin.ip === 'broker' ? 'orange' : undefined}
+          />
         </div>
+
+        {/* Will Testament Info */}
+        {log.sessionInfo?.lastWillTopic && (
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <div className="text-sm font-medium text-yellow-400 mb-2">⚠️ Last Will Testament Configured</div>
+            <InfoRow label="Will Topic" value={log.sessionInfo.lastWillTopic} />
+          </div>
+        )}
       </div>
 
-      {/* Sparkplug Metadata */}
+      {/* Sparkplug Metadata (if available) */}
+      {log.sparkplugMetadata && (
+        <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">⚡ Sparkplug B Metadata</h3>
+          <div className="grid grid-cols-2 gap-4">
+            {log.sparkplugMetadata.groupId && <InfoRow label="Group ID" value={log.sparkplugMetadata.groupId} />}
+            {log.sparkplugMetadata.edgeNodeId && <InfoRow label="Edge Node ID" value={log.sparkplugMetadata.edgeNodeId} />}
+            {log.sparkplugMetadata.deviceId && <InfoRow label="Device ID" value={log.sparkplugMetadata.deviceId} />}
+            {log.sparkplugMetadata.bdSeq !== undefined && <InfoRow label="Birth/Death Seq" value={log.sparkplugMetadata.bdSeq.toString()} />}
+            {log.sparkplugMetadata.seq !== undefined && <InfoRow label="Sequence Number" value={log.sparkplugMetadata.seq.toString()} />}
+            {log.sparkplugMetadata.metricCount !== undefined && <InfoRow label="Metric Count" value={log.sparkplugMetadata.metricCount.toString()} />}
+          </div>
+        </div>
+      )}
+
+      {/* Sparkplug Payload */}
       {log.decoded && (
         <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
           <h3 className="text-lg font-semibold text-white mb-4">Sparkplug B Payload</h3>
@@ -400,11 +431,17 @@ function StructureTab({ log }: { log: BrokerLog }) {
 }
 
 // Helper Components
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, highlight }: { label: string; value: string; highlight?: 'orange' | 'blue' | 'green' }) {
+  const highlightColors = {
+    orange: 'text-orange-400',
+    blue: 'text-blue-400',
+    green: 'text-green-400',
+  };
+
   return (
     <div className="flex justify-between text-sm py-1">
       <span className="text-slate-400">{label}:</span>
-      <span className="text-slate-200 font-mono">{value}</span>
+      <span className={`font-mono ${highlight ? highlightColors[highlight] : 'text-slate-200'}`}>{value}</span>
     </div>
   );
 }

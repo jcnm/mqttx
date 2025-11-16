@@ -36,6 +36,12 @@ export interface SessionInfo {
     ndeathPublished?: boolean;
     birthTimestamp?: number;
   };
+  tls?: {
+    authorized: boolean;
+    peerCertificate?: any;
+    cipher?: string;
+  };
+  username?: string;
   stats: {
     bytesIn: number;
     bytesOut: number;
@@ -138,10 +144,18 @@ export class BrokerMonitor extends EventEmitter {
   }
 
   private handleClientConnect(client: Client): void {
+    // Extract TLS information if available
+    const conn = client.conn as any;
+    const tlsInfo = conn?.encrypted ? {
+      authorized: conn.authorized || false,
+      peerCertificate: conn.getPeerCertificate ? conn.getPeerCertificate() : undefined,
+      cipher: conn.getCipher ? conn.getCipher()?.name : undefined,
+    } : undefined;
+
     const session: SessionInfo = {
       clientId: client.id,
-      ip: (client.conn as any)?.remoteAddress || 'unknown',
-      port: (client.conn as any)?.remotePort || 0,
+      ip: conn?.remoteAddress || 'unknown',
+      port: conn?.remotePort || 0,
       connectedAt: Date.now(),
       lastActivity: Date.now(),
       cleanSession: client.clean !== false,
@@ -155,6 +169,8 @@ export class BrokerMonitor extends EventEmitter {
         qos: (client as any).will.qos as 0 | 1 | 2,
         retain: (client as any).will.retain,
       } : undefined,
+      tls: tlsInfo,
+      username: (client as any).username,
       stats: {
         bytesIn: 0,
         bytesOut: 0,
@@ -222,15 +238,18 @@ export class BrokerMonitor extends EventEmitter {
     this.stats.activeConnections = this.sessions.size;
   }
 
-  private handlePublish(packet: any, client: Client): void {
-    const session = this.sessions.get(client.id);
-    if (!session) return;
+  private handlePublish(packet: any, client: Client | null): void {
+    // Handle broker-published messages (client will be null)
+    const clientId = client?.id || 'broker';
+    const session = client ? this.sessions.get(client.id) : null;
 
-    // Update session activity
-    session.lastActivity = Date.now();
-    session.isStale = false;
-    session.stats.messagesIn++;
-    session.stats.bytesIn += packet.payload?.length || 0;
+    // Update session activity if this is a client message
+    if (session) {
+      session.lastActivity = Date.now();
+      session.isStale = false;
+      session.stats.messagesIn++;
+      session.stats.bytesIn += packet.payload?.length || 0;
+    }
 
     this.stats.totalMessages++;
     this.stats.bytesReceived += packet.payload?.length || 0;
@@ -291,19 +310,26 @@ export class BrokerMonitor extends EventEmitter {
       id: this.generateLogId(),
       timestamp: Date.now(),
       type: 'publish',
-      clientId: client.id,
+      clientId,
       topic: packet.topic,
       qos: packet.qos as 0 | 1 | 2,
       retain: packet.retain,
-      messageType: parsed.isValid ? MessageType[parsed.messageType!] : undefined,
+      messageType: parsed.isValid ? parsed.messageType : undefined,
       payload: new Uint8Array(packet.payload),
       decoded,
-      origin: {
+      origin: session ? {
         ip: session.ip,
         port: session.port,
+      } : {
+        ip: 'broker',
+        port: 0,
       },
       mqttPacket: mqttPacket || undefined,
       sparkplugMetadata,
+      sessionInfo: session && session.willMessage ? {
+        isNewSession: false,
+        lastWillTopic: session.willMessage.topic,
+      } : undefined,
     };
 
     this.addLog(log);

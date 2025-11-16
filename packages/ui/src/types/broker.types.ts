@@ -143,6 +143,14 @@ export interface Session {
     retain: boolean;
   };
 
+  // TLS/Security information
+  tls?: {
+    authorized: boolean;
+    peerCertificate?: any;
+    cipher?: string;
+  };
+  username?: string;
+
   // Sparkplug B session tracking
   sparkplugState?: {
     groupId?: string;

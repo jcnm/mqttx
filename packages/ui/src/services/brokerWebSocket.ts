@@ -188,6 +188,9 @@ export class BrokerWebSocketService {
       isStale: backendSession.isStale,
       subscriptions: backendSession.subscriptions || [],
       willTopic: backendSession.willMessage?.topic,
+      willMessage: backendSession.willMessage,
+      tls: backendSession.tls,
+      username: backendSession.username,
       sparkplugState: backendSession.sparkplugState,
       stats: backendSession.stats,
     };

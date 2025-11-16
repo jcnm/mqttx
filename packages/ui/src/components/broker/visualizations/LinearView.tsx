@@ -102,10 +102,26 @@ export function LinearView({ logs }: LinearViewProps) {
       {
         accessorKey: 'clientId',
         header: 'Client ID',
-        cell: (info) => (
-          <span className="text-xs text-blue-400 font-mono">{info.getValue() as string}</span>
-        ),
-        size: 150,
+        cell: (info) => {
+          const clientId = info.getValue() as string;
+          const log = info.row.original;
+          const isBrokerPublished = clientId === 'broker';
+
+          return (
+            <div className="flex flex-col">
+              <span className={`text-xs font-mono ${isBrokerPublished ? 'text-orange-400' : 'text-blue-400'}`}>
+                {clientId}
+              </span>
+              {log.sparkplugMetadata?.edgeNodeId && (
+                <span className="text-xs text-slate-500 truncate">
+                  {log.sparkplugMetadata.groupId}/{log.sparkplugMetadata.edgeNodeId}
+                  {log.sparkplugMetadata.deviceId && `/${log.sparkplugMetadata.deviceId}`}
+                </span>
+              )}
+            </div>
+          );
+        },
+        size: 180,
       },
       {
         accessorKey: 'topic',
@@ -149,17 +165,46 @@ export function LinearView({ logs }: LinearViewProps) {
         size: 70,
       },
       {
-        id: 'payloadSize',
-        header: 'Payload Size',
+        id: 'origin',
+        header: 'Origin',
         cell: (info) => {
-          const payload = info.row.original.payload;
+          const log = info.row.original;
+          const isBrokerOrigin = log.origin.ip === 'broker';
+          return (
+            <div className="flex flex-col">
+              <span className={`text-xs ${isBrokerOrigin ? 'text-orange-400' : 'text-slate-300'}`}>
+                {log.origin.ip}
+              </span>
+              {!isBrokerOrigin && log.origin.port > 0 && (
+                <span className="text-xs text-slate-500">:{log.origin.port}</span>
+              )}
+            </div>
+          );
+        },
+        size: 120,
+      },
+      {
+        id: 'payloadSize',
+        header: 'Payload',
+        cell: (info) => {
+          const log = info.row.original;
+          const payload = log.payload;
           if (!payload) return <span className="text-xs text-slate-500">-</span>;
 
           const size = payload.length;
           const formatted = size > 1024 ? `${(size / 1024).toFixed(1)} KB` : `${size} B`;
-          return <span className="text-xs text-slate-300">{formatted}</span>;
+          const metricCount = log.sparkplugMetadata?.metricCount;
+
+          return (
+            <div className="flex flex-col">
+              <span className="text-xs text-slate-300">{formatted}</span>
+              {metricCount !== undefined && metricCount > 0 && (
+                <span className="text-xs text-emerald-500">{metricCount} metrics</span>
+              )}
+            </div>
+          );
         },
-        size: 100,
+        size: 120,
       },
       {
         id: 'actions',
