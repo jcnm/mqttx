@@ -17,7 +17,7 @@ import { processSparkplugMessage, calculateMessagesPerSecond } from '../../servi
 import { useAlarmMonitoring } from '../../hooks/useAlarmMonitoring';
 
 export function SCADAView() {
-  const { nodes, devices, viewMode, setViewMode, addNode, updateNode, addDevice, updateDevice, removeNode, removeDevice, batchUpdate } = useSCADAStore();
+  const { nodes, devices, viewMode, setViewMode, removeNode, removeDevice, batchUpdate } = useSCADAStore();
   const { isConnected, messages } = useMQTTStore();
 
   // Enable alarm monitoring

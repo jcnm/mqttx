@@ -123,7 +123,7 @@ export const useSCADAStore = create<SCADAState>()(
               }
               break;
             case 'addDevice':
-              if (update.device && 'deviceId' in update.device) {
+              if (update.device && 'deviceId' in update.device && update.device.deviceId) {
                 state.devices.set(update.device.deviceId, update.device as Device);
               }
               break;
