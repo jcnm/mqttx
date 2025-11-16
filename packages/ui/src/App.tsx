@@ -9,7 +9,6 @@ import { LoginPage } from './components/auth/LoginPage';
 import { initBrokerWebSocket, cleanupBrokerWebSocket } from './services/brokerWebSocket';
 import { simulationService } from './services/simulationService';
 import { scadaMqttService } from './services/scadaMqttService';
-import { simulationMqttService } from './services/simulationMqttService';
 
 // Components
 import { SCADAView } from './components/scada/SCADAView';
@@ -65,7 +64,6 @@ function App() {
     if (!simulationService.isReady()) {
       console.log('🎮 Initializing Simulation Service');
       simulationService.initialize(brokerUrl, 1);
-      setSimulationConnected(true);
     }
 
     // 3. Initialize Broker WebSocket for real-time monitoring
