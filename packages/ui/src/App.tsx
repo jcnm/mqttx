@@ -26,6 +26,9 @@ function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [scadaConnected, setScadaConnected] = useState(false);
 
+  // DEBUG: Log pour voir où on en est
+  console.log('🔍 App render - authChecked:', authChecked, 'user:', user);
+
   // Check connection status periodically
   useEffect(() => {
     const checkConnections = () => {
@@ -43,15 +46,21 @@ function App() {
 
   useEffect(() => {
     // Check for existing authentication on mount
+    console.log('🔍 Running checkAuth...');
     checkAuth();
     setAuthChecked(true);
   }, [checkAuth]);
 
   useEffect(() => {
     // Only connect to broker if authenticated
-    if (!user) return;
+    if (!user) {
+      console.log('🔍 No user, skipping broker initialization');
+      return;
+    }
 
+    console.log('🔍 User authenticated, initializing services...');
     const brokerUrl = getBrokerUrl();
+    console.log('🔍 Broker URL:', brokerUrl);
 
     console.log('🔌 Initializing 3 separate MQTT connections...');
 
@@ -97,18 +106,24 @@ function App() {
 
   // Wait for auth check to complete
   if (!authChecked) {
+    console.log('🔍 Waiting for auth check...');
     return (
       <div className="flex items-center justify-center h-screen bg-slate-950">
-        <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white">Loading...</p>
+        </div>
       </div>
     );
   }
 
   // Show login page if not authenticated
   if (!user) {
+    console.log('🔍 No user, showing login page');
     return <LoginPage onLoginSuccess={() => {}} />;
   }
 
+  console.log('🔍 Rendering main app...');
   return (
     <BrowserRouter>
       <div className="flex flex-col h-screen bg-slate-950 text-slate-100">
