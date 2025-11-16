@@ -26,6 +26,22 @@ function App() {
   const [scadaConnected, setScadaConnected] = useState(false);
   const [simulationConnected, setSimulationConnected] = useState(false);
 
+  // Check connection status periodically
+  useEffect(() => {
+    const checkConnections = () => {
+      setScadaConnected(scadaMqttService.isClientConnected());
+      setSimulationConnected(simulationMqttService.isClientConnected());
+    };
+
+    // Check immediately
+    checkConnections();
+
+    // Check every 2 seconds
+    const interval = setInterval(checkConnections, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     // Check for existing authentication on mount
     checkAuth();
@@ -89,7 +105,7 @@ function App() {
   return (
     <BrowserRouter>
       <div className="flex flex-col h-screen bg-slate-950 text-slate-100">
-        <Header isConnected={isConnected} onOpenSettings={() => setSettingsOpen(true)} />
+        <Header isConnected={scadaConnected} onOpenSettings={() => setSettingsOpen(true)} />
 
         <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
