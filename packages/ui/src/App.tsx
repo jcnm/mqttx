@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useMQTTStore } from './stores/mqttStore';
 import { useBrokerStore } from './stores/brokerStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useAuthStore } from './stores/authStore';
@@ -9,6 +8,8 @@ import { SettingsModal } from './components/settings/SettingsModal';
 import { LoginPage } from './components/auth/LoginPage';
 import { initBrokerWebSocket, cleanupBrokerWebSocket } from './services/brokerWebSocket';
 import { simulationService } from './services/simulationService';
+import { scadaMqttService } from './services/scadaMqttService';
+import { simulationMqttService } from './services/simulationMqttService';
 
 // Components
 import { SCADAView } from './components/scada/SCADAView';
@@ -17,12 +18,13 @@ import { PlantSimulatorNew } from './components/simulator/PlantSimulatorNew';
 import { CommandPanel } from './components/commands/CommandPanel';
 
 function App() {
-  const { client, connect, disconnect, isConnected, setOnMessage } = useMQTTStore();
   const { addLog } = useBrokerStore();
   const { getBrokerUrl } = useSettingsStore();
   const { user, checkAuth } = useAuthStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [scadaConnected, setScadaConnected] = useState(false);
+  const [simulationConnected, setSimulationConnected] = useState(false);
 
   useEffect(() => {
     // Check for existing authentication on mount
@@ -34,34 +36,41 @@ function App() {
     // Only connect to broker if authenticated
     if (!user) return;
 
-    // Connect to MQTT broker on mount using settings
     const brokerUrl = getBrokerUrl();
-    connect(brokerUrl);
 
-    // Set up message callback for broker store integration
-    setOnMessage((log) => {
+    console.log('🔌 Initializing 3 separate MQTT connections...');
+
+    // 1. Connect SCADA MQTT Service (Host Application)
+    scadaMqttService.connect(brokerUrl);
+    scadaMqttService.setOnMessage((log) => {
       addLog(log);
     });
+    setScadaConnected(true);
 
-    // Initialize Broker WebSocket for real-time monitoring
+    // 2. Initialize Simulation Service (EoN/Device)
+    if (!simulationService.isReady()) {
+      console.log('🎮 Initializing Simulation Service');
+      simulationService.initialize(brokerUrl, 1);
+      setSimulationConnected(true);
+    }
+
+    // 3. Initialize Broker WebSocket for real-time monitoring
     console.log('🔌 Initializing Broker WebSocket connection...');
     initBrokerWebSocket();
 
     return () => {
-      disconnect();
+      // Disconnect SCADA service
+      scadaMqttService.disconnect();
+      setScadaConnected(false);
+
+      // Disconnect broker WebSocket
       cleanupBrokerWebSocket();
+
       // Note: We do NOT destroy simulationService here because we want
       // the simulation to persist across route changes
+      // It will be destroyed only on app unmount
     };
-  }, [user, connect, disconnect, setOnMessage, addLog, getBrokerUrl]);
-
-  // Initialize simulation service when MQTT client is available
-  useEffect(() => {
-    if (client && user && !simulationService.isReady()) {
-      console.log('🎮 Initializing Simulation Service with MQTT client');
-      simulationService.initialize(client, 1);
-    }
-  }, [client, user]);
+  }, [user, addLog, getBrokerUrl]);
 
   // Wait for auth check to complete
   if (!authChecked) {

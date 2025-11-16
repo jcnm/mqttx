@@ -8,8 +8,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { useBrokerStore } from '../../stores/brokerStore';
 import { useMessageTraceStore } from '../../stores/messageTraceStore';
-import { useMQTTStore } from '../../stores/mqttStore';
-import { encodePayload } from '@sparkplug/codec';
+import { scadaMqttService } from '../../services/scadaMqttService';
 import { MessageDetailPopover } from '../common/MessageDetailPopover';
 import { MessageTraceInspector } from './MessageTraceInspector';
 import type { SimulatedEoN, MetricDefinition } from '../../types/simulator.types';
@@ -26,7 +25,6 @@ type MessageDirection = 'sent' | 'received' | 'all';
 export function EoNTraceView({ node, onClose }: EoNTraceViewProps) {
   const { logs } = useBrokerStore();
   const { traces } = useMessageTraceStore();
-  const { client: mqttClient } = useMQTTStore();
 
   const [filter, setFilter] = useState<MessageDirection>('all');
   const [commandMetrics, setCommandMetrics] = useState<MetricDefinition[]>([]);
@@ -145,42 +143,22 @@ export function EoNTraceView({ node, onClose }: EoNTraceViewProps) {
   }, [node.metrics, commandMetrics.length]);
 
   const handleSendCommand = async () => {
-    if (!mqttClient || !mqttClient.connected) {
-      alert('MQTT client not connected');
+    if (!scadaMqttService.isClientConnected()) {
+      alert('SCADA MQTT client not connected');
       return;
     }
 
     setSending(true);
 
     try {
-      const topic = `spBv1.0/${node.config.groupId}/NCMD/${node.config.edgeNodeId}`;
+      // Use SCADA service to send NCMD (Node Command)
+      await scadaMqttService.sendNodeCommand(
+        node.config.groupId,
+        node.config.edgeNodeId,
+        commandMetrics
+      );
 
-      const sparkplugPayload = {
-        timestamp: BigInt(Date.now()),
-        seq: BigInt(0),
-        metrics: commandMetrics.map((m) => ({
-          name: m.name,
-          timestamp: BigInt(Date.now()),
-          datatype: m.datatype,
-          value: m.value,
-        })),
-      };
-
-      const payload = encodePayload(sparkplugPayload);
-
-      await new Promise<void>((resolve, reject) => {
-        mqttClient.publish(
-          topic,
-          payload as any,
-          { qos: node.config.network.qos },
-          (err) => {
-            if (err) reject(err);
-            else resolve();
-          }
-        );
-      });
-
-      console.log(`✅ Command sent to ${node.config.edgeNodeId}`);
+      console.log(`✅ NCMD sent to ${node.config.edgeNodeId} via SCADA service`);
     } catch (error) {
       console.error('Failed to send command:', error);
       alert(`Failed to send command: ${error}`);

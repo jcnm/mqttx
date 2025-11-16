@@ -5,9 +5,9 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSimulatorStore } from '../../stores/simulatorStore';
-import { useMQTTStore } from '../../stores/mqttStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useMessageTraceStore } from '../../stores/messageTraceStore';
+import { simulationMqttService } from '../../services/simulationMqttService';
 import { EnhancedReactFlowCanvas } from './EnhancedReactFlowCanvas';
 import { SimulatorControls } from './SimulatorControls';
 import { ConfigPanel } from './ConfigPanel';
@@ -42,9 +42,9 @@ export function PlantSimulatorNew() {
     updateStats,
   } = useSimulatorStore();
 
-  const { client: mqttClient, isConnected } = useMQTTStore();
   const { simulatorDefaults } = useSettingsStore();
   const { addTrace } = useMessageTraceStore();
+  const [isConnected, setIsConnected] = useState(false);
 
   // UI State
   const [toolPanelOpen, setToolPanelOpen] = useState(true);
@@ -57,6 +57,21 @@ export function PlantSimulatorNew() {
   // Use the persistent simulation service instead of creating a new engine
   // The service is initialized in App.tsx and persists across route changes
   const simulationEngine = simulationService.getEngine();
+
+  // Check connection status
+  useEffect(() => {
+    const checkConnection = () => {
+      setIsConnected(simulationMqttService.isClientConnected());
+    };
+
+    // Check immediately
+    checkConnection();
+
+    // Check every second
+    const interval = setInterval(checkConnection, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Update engine speed when changed
   useEffect(() => {

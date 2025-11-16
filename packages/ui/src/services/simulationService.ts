@@ -1,17 +1,17 @@
 /**
  * Simulation Service - Persistent Simulation Engine Manager
  * Manages simulation engine lifecycle independent of component mount/unmount
+ * Uses dedicated MQTT client for EoN/Device simulation (Sparkplug B compliant)
  * Allows simulation to continue running even when navigating away from Simulation view
  */
 
-import type { MqttClient } from 'mqtt';
 import { createSimulationEngine } from './simulationEngine';
+import { simulationMqttService } from './simulationMqttService';
 import type { SimulatorStats } from '../types/simulator.types';
 import type { MessageTrace } from '../types/message-trace.types';
 
 interface SimulationServiceState {
   engine: ReturnType<typeof createSimulationEngine> | null;
-  mqttClient: MqttClient | null;
   statsCallback: ((stats: SimulatorStats) => void) | null;
   isInitialized: boolean;
 }
@@ -19,18 +19,27 @@ interface SimulationServiceState {
 class SimulationService {
   private state: SimulationServiceState = {
     engine: null,
-    mqttClient: null,
     statsCallback: null,
     isInitialized: false,
   };
 
   /**
-   * Initialize the simulation service with MQTT client
+   * Initialize the simulation service with dedicated MQTT client
    */
-  initialize(mqttClient: MqttClient, speed: number = 1): void {
+  initialize(brokerUrl: string, speed: number = 1): void {
     if (!this.state.isInitialized) {
       console.log('🎮 Initializing Simulation Service');
-      this.state.mqttClient = mqttClient;
+
+      // Connect dedicated MQTT client for simulation
+      simulationMqttService.connect(brokerUrl);
+
+      // Wait for client to be available
+      const mqttClient = simulationMqttService.getClient();
+      if (!mqttClient) {
+        console.error('❌ Failed to get MQTT client from simulationMqttService');
+        return;
+      }
+
       this.state.engine = createSimulationEngine(mqttClient, speed);
       this.state.isInitialized = true;
     } else if (this.state.engine) {
@@ -104,8 +113,11 @@ class SimulationService {
       // Get current nodes from store if needed
       this.state.engine.stop(new Map());
     }
+
+    // Disconnect dedicated MQTT client
+    simulationMqttService.disconnect();
+
     this.state.engine = null;
-    this.state.mqttClient = null;
     this.state.statsCallback = null;
     this.state.isInitialized = false;
   }
