@@ -91,11 +91,6 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
   const renderPostEncoding = () => {
     const { encodedPayload, sizeBytes } = trace.postEncoding;
 
-    // Convert Uint8Array to hex string for display
-    const hexString = Array.from(encodedPayload)
-      .map((byte) => byte.toString(16).padStart(2, '0'))
-      .join(' ');
-
     // Group into 16-byte rows for better readability
     const hexRows: string[] = [];
     for (let i = 0; i < encodedPayload.length; i += 16) {

@@ -10,10 +10,8 @@ import { useBrokerStore } from '../../stores/brokerStore';
 import { useMessageTraceStore } from '../../stores/messageTraceStore';
 import { scadaMqttService } from '../../services/scadaMqttService';
 import { MessageDetailPopover } from '../common/MessageDetailPopover';
-import { MessageTraceInspector } from './MessageTraceInspector';
 import type { SimulatedEoN, MetricDefinition } from '../../types/simulator.types';
 import type { BrokerLog } from '../../types/broker.types';
-import type { MessageTrace } from '../../types/message-trace.types';
 
 interface EoNTraceViewProps {
   node: SimulatedEoN;
@@ -32,8 +30,7 @@ export function EoNTraceView({ node, onClose }: EoNTraceViewProps) {
   const [sending, setSending] = useState(false);
   const [selectedLog, setSelectedLog] = useState<BrokerLog | null>(null);
   const [selectedMessageNumber, setSelectedMessageNumber] = useState<number | undefined>();
-  const [selectedTrace, setSelectedTrace] = useState<MessageTrace | null>(null);
-  const [viewMode, setViewMode] = useState<'traces' | 'broker'>('traces');
+  const [viewMode] = useState<'traces' | 'broker'>('traces');
 
   // Helper to extract message type from topic
   const extractMessageType = (topic: string): string | null => {
@@ -115,25 +112,6 @@ export function EoNTraceView({ node, onClose }: EoNTraceViewProps) {
 
     return { sent, received, total: dataSource.length, messagesPerSecond };
   }, [nodeTraces, nodeLogs, viewMode]);
-
-  // Original stats calculation
-  const _oldStats = useMemo(() => {
-    const sent = nodeLogs.filter((log) => {
-      const messageType = log.messageType || (log.topic ? extractMessageType(log.topic) : null);
-      return messageType && ['NBIRTH', 'NDEATH', 'NDATA', 'DBIRTH', 'DDEATH', 'DDATA'].includes(messageType);
-    }).length;
-    const received = nodeLogs.filter((log) => {
-      const messageType = log.messageType || (log.topic ? extractMessageType(log.topic) : null);
-      return messageType && ['NCMD', 'DCMD'].includes(messageType);
-    }).length;
-
-    // Calculate messages per second (last 60 seconds)
-    const oneMinuteAgo = Date.now() - 60000;
-    const recentMessages = nodeLogs.filter((log) => log.timestamp > oneMinuteAgo);
-    const messagesPerSecond = (recentMessages.length / 60).toFixed(2);
-
-    return { sent, received, total: nodeLogs.length, messagesPerSecond };
-  }, [nodeLogs]);
 
   // Initialize command metrics from node metrics
   useEffect(() => {

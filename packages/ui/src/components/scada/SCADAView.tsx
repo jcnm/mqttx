@@ -15,12 +15,11 @@ import { DetailPanel } from './DetailPanel';
 import { FilterPanel } from './FilterPanel';
 import { StateIndicator } from './StateIndicator';
 import { AlarmPanel } from './AlarmPanel';
-import { processSparkplugMessage, calculateMessagesPerSecond } from '../../services/sparkplugProcessor';
+import { processSparkplugMessage } from '../../services/sparkplugProcessor';
 import { useAlarmMonitoring } from '../../hooks/useAlarmMonitoring';
 
 export function SCADAView() {
   const { nodes, devices, viewMode, setViewMode, removeNode, removeDevice, batchUpdate } = useSCADAStore();
-  const { logs } = useBrokerStore();
 
   // SCADA connection status
   const isConnected = scadaMqttService.isClientConnected();
@@ -195,10 +194,10 @@ export function SCADAView() {
       (sum, node) => sum + node.devices.filter((d) => d.online).length,
       0
     );
-    const messagesPerSec = calculateMessagesPerSecond(messages);
+    const messagesPerSec = 0; // TODO: Implement message rate calculation from broker logs
 
     return { totalNodes, onlineNodes, totalDevices, onlineDevices, messagesPerSec };
-  }, [nodes, messages]);
+  }, [nodes]);
 
   return (
     <div className="h-full bg-slate-950 p-6">

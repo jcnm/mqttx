@@ -24,13 +24,11 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [scadaConnected, setScadaConnected] = useState(false);
-  const [simulationConnected, setSimulationConnected] = useState(false);
 
   // Check connection status periodically
   useEffect(() => {
     const checkConnections = () => {
       setScadaConnected(scadaMqttService.isClientConnected());
-      setSimulationConnected(simulationMqttService.isClientConnected());
     };
 
     // Check immediately
