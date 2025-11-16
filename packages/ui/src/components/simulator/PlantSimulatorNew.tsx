@@ -81,7 +81,14 @@ export function PlantSimulatorNew() {
   // Set stats callback for this component
   useEffect(() => {
     simulationService.setStatsCallback((engineStats) => {
-      updateStats(engineStats);
+      // Convert engine stats to full SimulatorStats
+      // The engine provides: messagesPublished, messagesPerSecond, uptime
+      // We preserve the other stats from the store
+      updateStats({
+        messagesPublished: engineStats.messagesPublished,
+        messagesPerSecond: engineStats.messagesPerSecond,
+        uptime: engineStats.uptime,
+      });
     });
   }, [updateStats]);
 

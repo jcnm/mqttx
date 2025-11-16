@@ -47,7 +47,7 @@ class SimulationMqttService {
       this.state.brokerUrl = brokerUrl;
     });
 
-    client.on('message', (topic, payload, packet) => {
+    client.on('message', (topic) => {
       // EoN receives NCMD and DCMD commands
       if (topic.includes('/NCMD/') || topic.includes('/DCMD/')) {
         console.log(`📥 [Simulation MQTT] Received command: ${topic}`);

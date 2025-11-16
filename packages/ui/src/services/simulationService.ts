@@ -7,12 +7,18 @@
 
 import { createSimulationEngine } from './simulationEngine';
 import { simulationMqttService } from './simulationMqttService';
-import type { SimulatorStats } from '../types/simulator.types';
 import type { MessageTrace } from '../types/message-trace.types';
+
+// Type for engine stats (subset of SimulatorStats)
+type EngineStats = {
+  messagesPublished: number;
+  messagesPerSecond: number;
+  uptime: number;
+};
 
 interface SimulationServiceState {
   engine: ReturnType<typeof createSimulationEngine> | null;
-  statsCallback: ((stats: SimulatorStats) => void) | null;
+  statsCallback: ((stats: EngineStats) => void) | null;
   isInitialized: boolean;
 }
 
@@ -65,14 +71,14 @@ class SimulationService {
   /**
    * Set the stats callback
    */
-  setStatsCallback(callback: (stats: SimulatorStats) => void): void {
+  setStatsCallback(callback: (stats: EngineStats) => void): void {
     this.state.statsCallback = callback;
   }
 
   /**
    * Get the stats callback
    */
-  getStatsCallback(): ((stats: SimulatorStats) => void) | null {
+  getStatsCallback(): ((stats: EngineStats) => void) | null {
     return this.state.statsCallback;
   }
 
