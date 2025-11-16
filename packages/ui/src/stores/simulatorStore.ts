@@ -89,6 +89,7 @@ interface SimulatorState {
 
   resetSimulation: () => void;
   clearAll: () => void;
+  initializeDemo: () => void; // Initialize with demo nodes
 }
 
 export const useSimulatorStore = create<SimulatorState>()(
@@ -539,6 +540,69 @@ export const useSimulatorStore = create<SimulatorState>()(
           messagesPerSecond: 0,
           uptime: 0,
         };
+      }),
+
+    // Initialize Demo Configuration
+    initializeDemo: () =>
+      set((state) => {
+        // Only initialize if there are no nodes
+        if (state.nodes.size > 0) {
+          console.log('⏭️  Demo already initialized (nodes exist)');
+          return;
+        }
+
+        console.log('🎬 Initializing demo configuration...');
+
+        // Create 2 demo EoN nodes from templates
+        const template1 = state.templates.find(t => t.id === 'pump-station');
+        const template2 = state.templates.find(t => t.id === 'hvac-system');
+
+        if (template1 && template1.config && template1.config.length > 0) {
+          const eonConfig = template1.config[0];
+          const demoNode1: SimulatedEoN = {
+            id: `eon-${Date.now()}-1`,
+            state: 'stopped',
+            config: {
+              ...eonConfig.config,
+              edgeNodeId: 'Demo_PumpStation_01',
+            },
+            metrics: eonConfig.metrics || [],
+            devices: eonConfig.devices?.map((d, i) => ({
+              ...d,
+              id: `device-${Date.now()}-${i}`,
+            })) || [],
+          };
+          state.nodes.set(demoNode1.id, demoNode1);
+          console.log('✅ Created demo node:', demoNode1.config.edgeNodeId);
+        }
+
+        if (template2 && template2.config && template2.config.length > 0) {
+          const eonConfig = template2.config[0];
+          const demoNode2: SimulatedEoN = {
+            id: `eon-${Date.now()}-2`,
+            state: 'stopped',
+            config: {
+              ...eonConfig.config,
+              edgeNodeId: 'Demo_HVAC_01',
+            },
+            metrics: eonConfig.metrics || [],
+            devices: eonConfig.devices?.map((d, i) => ({
+              ...d,
+              id: `device-${Date.now() + 1000}-${i}`,
+            })) || [],
+          };
+          state.nodes.set(demoNode2.id, demoNode2);
+          console.log('✅ Created demo node:', demoNode2.config.edgeNodeId);
+        }
+
+        // Update stats
+        state.stats.totalNodes = state.nodes.size;
+        state.stats.totalDevices = Array.from(state.nodes.values()).reduce(
+          (sum, n) => sum + n.devices.length,
+          0
+        );
+
+        console.log(`🎬 Demo initialized: ${state.stats.totalNodes} nodes, ${state.stats.totalDevices} devices`);
       }),
   }))
 );

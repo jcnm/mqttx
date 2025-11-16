@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useBrokerStore } from './stores/brokerStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useAuthStore } from './stores/authStore';
+import { useSimulatorStore } from './stores/simulatorStore';
 import { Header } from './components/layout/Header';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { LoginPage } from './components/auth/LoginPage';
@@ -20,6 +21,7 @@ function App() {
   const { addLog } = useBrokerStore();
   const { getBrokerUrl } = useSettingsStore();
   const { user, checkAuth } = useAuthStore();
+  const { initializeDemo, startSimulation } = useSimulatorStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [scadaConnected, setScadaConnected] = useState(false);
@@ -64,6 +66,15 @@ function App() {
     if (!simulationService.isReady()) {
       console.log('🎮 Initializing Simulation Service');
       simulationService.initialize(brokerUrl, 1);
+
+      // Initialize demo configuration with sample nodes
+      initializeDemo();
+
+      // Auto-start simulation after a short delay to ensure everything is connected
+      setTimeout(() => {
+        console.log('🚀 Auto-starting simulation...');
+        startSimulation();
+      }, 2000);
     }
 
     // 3. Initialize Broker WebSocket for real-time monitoring
