@@ -378,27 +378,27 @@ export class SimulationEngine {
         }
       }
 
-      // Update statistics every second
+      // Update statistics on every tick
+      // This ensures stats are updated even when browser throttles setInterval (inactive tab)
       const now = Date.now();
-      if (now - this.state.lastStatsUpdate >= 1000) {
-        const elapsed = (now - this.state.lastStatsUpdate) / 1000;
-        const messagesPerSecond =
-          (this.state.messageCount - this.state.lastMessageCount) / elapsed;
+      const elapsed = (now - this.state.lastStatsUpdate) / 1000;
+      const messagesPerSecond =
+        elapsed > 0 ? (this.state.messageCount - this.state.lastMessageCount) / elapsed : 0;
 
-        // Log stats periodically (every 5 seconds)
-        if (Math.floor(currentTime) % 5 === 0) {
-          console.log(`📊 Stats: ${this.state.messageCount} total msgs | ${messagesPerSecond.toFixed(1)} msg/s | uptime: ${Math.floor(currentTime)}s`);
-        }
-
-        onStatsUpdate({
-          messagesPublished: this.state.messageCount,
-          messagesPerSecond,
-          uptime: currentTime,
-        });
-
-        this.state.lastMessageCount = this.state.messageCount;
-        this.state.lastStatsUpdate = now;
+      // Log stats periodically (every 5 seconds of real time)
+      if (Math.floor(currentTime) % 5 === 0 && Math.floor(currentTime) !== Math.floor((currentTime - elapsed))) {
+        console.log(`📊 Stats: ${this.state.messageCount} total msgs | ${messagesPerSecond.toFixed(1)} msg/s | uptime: ${Math.floor(currentTime)}s`);
       }
+
+      // Always send stats update with current time
+      onStatsUpdate({
+        messagesPublished: this.state.messageCount,
+        messagesPerSecond,
+        uptime: currentTime,  // Always based on Date.now(), not setInterval ticks
+      });
+
+      this.state.lastMessageCount = this.state.messageCount;
+      this.state.lastStatsUpdate = now;
     }, 1000 / this.speedMultiplier);
   }
 

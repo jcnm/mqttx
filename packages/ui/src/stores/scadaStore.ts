@@ -7,6 +7,14 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { EoNNode, Device, ViewMode, SCADAFilter } from '../types/scada.types';
 
+interface BatchUpdate {
+  type: 'addNode' | 'updateNode' | 'addDevice' | 'updateDevice';
+  nodeKey?: string;
+  node?: EoNNode | Partial<EoNNode>;
+  deviceId?: string;
+  device?: Device | Partial<Device>;
+}
+
 interface SCADAState {
   // Data
   nodes: Map<string, EoNNode>;
@@ -26,6 +34,9 @@ interface SCADAState {
   addDevice: (device: Device) => void;
   updateDevice: (deviceId: string, data: Partial<Device>) => void;
   removeDevice: (deviceId: string) => void;
+
+  // Batch update for performance
+  batchUpdate: (updates: BatchUpdate[]) => void;
 
   setSelectedNode: (nodeKey: string | null) => void;
   setSelectedDevice: (deviceId: string | null) => void;
@@ -89,6 +100,42 @@ export const useSCADAStore = create<SCADAState>()(
         state.devices.delete(deviceId);
         if (state.selectedDevice === deviceId) {
           state.selectedDevice = null;
+        }
+      }),
+
+    // Batch Update - Apply multiple updates in a single state mutation
+    batchUpdate: (updates) =>
+      set((state) => {
+        for (const update of updates) {
+          switch (update.type) {
+            case 'addNode':
+              if (update.node && 'groupId' in update.node && 'edgeNodeId' in update.node) {
+                const key = `${update.node.groupId}/${update.node.edgeNodeId}`;
+                state.nodes.set(key, update.node as EoNNode);
+              }
+              break;
+            case 'updateNode':
+              if (update.nodeKey && update.node) {
+                const node = state.nodes.get(update.nodeKey);
+                if (node) {
+                  state.nodes.set(update.nodeKey, { ...node, ...update.node });
+                }
+              }
+              break;
+            case 'addDevice':
+              if (update.device && 'deviceId' in update.device) {
+                state.devices.set(update.device.deviceId, update.device as Device);
+              }
+              break;
+            case 'updateDevice':
+              if (update.deviceId && update.device) {
+                const device = state.devices.get(update.deviceId);
+                if (device) {
+                  state.devices.set(update.deviceId, { ...device, ...update.device });
+                }
+              }
+              break;
+          }
         }
       }),
 

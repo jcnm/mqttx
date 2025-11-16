@@ -3,7 +3,7 @@
  * Real-time monitoring of Edge of Network nodes and devices
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useCallback } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { useSCADAStore } from '../../stores/scadaStore';
 import { useMQTTStore } from '../../stores/mqttStore';
@@ -17,7 +17,7 @@ import { processSparkplugMessage, calculateMessagesPerSecond } from '../../servi
 import { useAlarmMonitoring } from '../../hooks/useAlarmMonitoring';
 
 export function SCADAView() {
-  const { nodes, devices, viewMode, setViewMode, addNode, updateNode, addDevice, updateDevice, removeNode, removeDevice } = useSCADAStore();
+  const { nodes, devices, viewMode, setViewMode, addNode, updateNode, addDevice, updateDevice, removeNode, removeDevice, batchUpdate } = useSCADAStore();
   const { isConnected, messages } = useMQTTStore();
 
   // Enable alarm monitoring
@@ -25,6 +25,17 @@ export function SCADAView() {
 
   // Track last processed message index to prevent message loss
   const lastProcessedIndex = useRef(0);
+  // Batch update buffer for performance optimization
+  const batchUpdateBuffer = useRef<Array<any>>([]);
+  const batchUpdateTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Flush batch updates to store
+  const flushBatchUpdates = useCallback(() => {
+    if (batchUpdateBuffer.current.length > 0) {
+      batchUpdate(batchUpdateBuffer.current);
+      batchUpdateBuffer.current = [];
+    }
+  }, [batchUpdate]);
 
   // Process incoming MQTT messages and update SCADA store
   useEffect(() => {
@@ -49,9 +60,9 @@ export function SCADAView() {
 
         if (result.type === 'node' && result.node && result.nodeKey) {
           if (result.action === 'birth') {
-            addNode(result.node as any);
+            batchUpdateBuffer.current.push({ type: 'addNode', node: result.node });
           } else {
-            updateNode(result.nodeKey, result.node);
+            batchUpdateBuffer.current.push({ type: 'updateNode', nodeKey: result.nodeKey, node: result.node });
           }
         } else if (result.type === 'device' && result.device && result.nodeKey) {
           const node = nodes.get(result.nodeKey);
@@ -61,21 +72,31 @@ export function SCADAView() {
             // Add device to node's devices array
             const existingDevice = node.devices.find(d => d.deviceId === result.device!.deviceId);
             if (!existingDevice) {
-              updateNode(result.nodeKey, {
-                devices: [...node.devices, result.device as any],
+              batchUpdateBuffer.current.push({
+                type: 'updateNode',
+                nodeKey: result.nodeKey,
+                node: { devices: [...node.devices, result.device as any] },
               });
             }
-            addDevice(result.device as any);
+            batchUpdateBuffer.current.push({ type: 'addDevice', device: result.device });
           } else if (result.action === 'death') {
             // Update device online status
             const deviceIndex = node.devices.findIndex(d => d.deviceId === result.device!.deviceId);
             if (deviceIndex >= 0) {
               const updatedDevices = [...node.devices];
               updatedDevices[deviceIndex] = { ...updatedDevices[deviceIndex], ...result.device };
-              updateNode(result.nodeKey, { devices: updatedDevices });
+              batchUpdateBuffer.current.push({
+                type: 'updateNode',
+                nodeKey: result.nodeKey,
+                node: { devices: updatedDevices },
+              });
             }
             if (result.device.deviceId) {
-              updateDevice(result.device.deviceId, result.device);
+              batchUpdateBuffer.current.push({
+                type: 'updateDevice',
+                deviceId: result.device.deviceId,
+                device: result.device,
+              });
             }
           } else if (result.action === 'data') {
             // Update device metrics
@@ -85,13 +106,21 @@ export function SCADAView() {
               const existingDevice = updatedDevices[deviceIndex];
               const mergedMetrics = new Map([...existingDevice.metrics, ...result.device.metrics!]);
               updatedDevices[deviceIndex] = { ...existingDevice, ...result.device, metrics: mergedMetrics };
-              updateNode(result.nodeKey, { devices: updatedDevices });
+              batchUpdateBuffer.current.push({
+                type: 'updateNode',
+                nodeKey: result.nodeKey,
+                node: { devices: updatedDevices },
+              });
             }
             if (result.device.deviceId) {
               const existingDevice = devices.get(result.device.deviceId);
               if (existingDevice) {
                 const mergedMetrics = new Map([...existingDevice.metrics, ...result.device.metrics!]);
-                updateDevice(result.device.deviceId, { ...result.device, metrics: mergedMetrics });
+                batchUpdateBuffer.current.push({
+                  type: 'updateDevice',
+                  deviceId: result.device.deviceId,
+                  device: { ...result.device, metrics: mergedMetrics },
+                });
               }
             }
           }
@@ -100,10 +129,32 @@ export function SCADAView() {
         // Update last processed index
         lastProcessedIndex.current = lastProcessedIndex.current + index + 1;
       });
+
+      // Schedule batch update flush (100ms debounce or immediate if buffer is large)
+      if (batchUpdateBuffer.current.length > 0) {
+        if (batchUpdateTimer.current) {
+          clearTimeout(batchUpdateTimer.current);
+        }
+
+        // Flush immediately if buffer is large (>50 updates) to avoid memory issues
+        if (batchUpdateBuffer.current.length > 50) {
+          flushBatchUpdates();
+        } else {
+          // Otherwise debounce to 100ms
+          batchUpdateTimer.current = setTimeout(flushBatchUpdates, 100);
+        }
+      }
     });
 
-    return unsubscribe;
-  }, [nodes, devices, addNode, updateNode, addDevice, updateDevice]);
+    return () => {
+      unsubscribe();
+      if (batchUpdateTimer.current) {
+        clearTimeout(batchUpdateTimer.current);
+      }
+      // Flush any remaining updates on unmount
+      flushBatchUpdates();
+    };
+  }, [nodes, devices, batchUpdate, flushBatchUpdates]);
 
   // Periodic cleanup of stale offline nodes/devices (memory leak prevention)
   useEffect(() => {
