@@ -557,39 +557,41 @@ export const useSimulatorStore = create<SimulatorState>()(
         const template1 = state.templates.find(t => t.id === 'pump-station');
         const template2 = state.templates.find(t => t.id === 'hvac-system');
 
-        if (template1 && template1.config && template1.config.length > 0) {
+        if (template1 && Array.isArray(template1.config) && template1.config.length > 0) {
           const eonConfig = template1.config[0];
           const demoNode1: SimulatedEoN = {
             id: `eon-${Date.now()}-1`,
             state: 'stopped',
+            position: { x: 100, y: 100 },
             config: {
               ...eonConfig.config,
               edgeNodeId: 'Demo_PumpStation_01',
             },
             metrics: eonConfig.metrics || [],
-            devices: eonConfig.devices?.map((d, i) => ({
+            devices: (eonConfig.devices || []).map((d: any, i: number) => ({
               ...d,
               id: `device-${Date.now()}-${i}`,
-            })) || [],
+            })),
           };
           state.nodes.set(demoNode1.id, demoNode1);
           console.log('✅ Created demo node:', demoNode1.config.edgeNodeId);
         }
 
-        if (template2 && template2.config && template2.config.length > 0) {
+        if (template2 && Array.isArray(template2.config) && template2.config.length > 0) {
           const eonConfig = template2.config[0];
           const demoNode2: SimulatedEoN = {
             id: `eon-${Date.now()}-2`,
             state: 'stopped',
+            position: { x: 400, y: 100 },
             config: {
               ...eonConfig.config,
               edgeNodeId: 'Demo_HVAC_01',
             },
             metrics: eonConfig.metrics || [],
-            devices: eonConfig.devices?.map((d, i) => ({
+            devices: (eonConfig.devices || []).map((d: any, i: number) => ({
               ...d,
               id: `device-${Date.now() + 1000}-${i}`,
-            })) || [],
+            })),
           };
           state.nodes.set(demoNode2.id, demoNode2);
           console.log('✅ Created demo node:', demoNode2.config.edgeNodeId);
