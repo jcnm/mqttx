@@ -14,21 +14,25 @@ import {
   FolderOpen,
   FileText,
   X,
-  Copy
+  Copy,
+  MessageSquare
 } from 'lucide-react';
 import { useSCADAStore } from '../../stores/scadaStore';
+import { useBrokerStore } from '../../stores/brokerStore';
 import { MetricGrid } from './MetricDisplay';
 import { DeviceCard } from './DeviceCard';
 import { TemplateDisplay } from './TemplateDisplay';
 import { DataSetTable } from './DataSetTable';
 import { MetricHistoryPanel } from './MetricHistoryPanel';
 import { FileDisplay, type FileData } from './FileDisplay';
+import { MessageHistoryTab } from './MessageHistoryTab';
 
-type TabType = 'overview' | 'metrics' | 'birth' | 'history' | 'templates' | 'datasets' | 'files';
+type TabType = 'overview' | 'metrics' | 'birth' | 'history' | 'messages' | 'templates' | 'datasets' | 'files';
 
 export function DetailPanel() {
   const { nodes, devices, selectedNode, selectedDevice, setSelectedNode, setSelectedDevice } =
     useSCADAStore();
+  const { logs } = useBrokerStore();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [metricSearch, setMetricSearch] = useState('');
 
@@ -38,6 +42,38 @@ export function DetailPanel() {
 
   const entity = node || device;
   const isNode = !!node;
+
+  // Filter logs for this specific node or device
+  const entityLogs = useMemo(() => {
+    if (!entity) return [];
+
+    if (isNode && node) {
+      // Filter logs for this node (all message types)
+      const topicPattern = new RegExp(
+        `^spBv1\\.0/${node.groupId}/(N|D)(BIRTH|DEATH|DATA|CMD)/${node.edgeNodeId}(/.*)?$`
+      );
+      return logs.filter((log) => log.topic && topicPattern.test(log.topic));
+    } else if (device) {
+      // Filter logs for this specific device
+      // Need to find parent node first
+      let parentNode = null;
+      for (const [, n] of nodes) {
+        if (n.devices.some((d) => d.deviceId === device.deviceId)) {
+          parentNode = n;
+          break;
+        }
+      }
+
+      if (!parentNode) return [];
+
+      const topicPattern = new RegExp(
+        `^spBv1\\.0/${parentNode.groupId}/D(BIRTH|DEATH|DATA|CMD)/${parentNode.edgeNodeId}/${device.deviceId}$`
+      );
+      return logs.filter((log) => log.topic && topicPattern.test(log.topic));
+    }
+
+    return [];
+  }, [logs, entity, isNode, node, device, nodes]);
 
   // Close panel
   const handleClose = () => {
@@ -167,6 +203,12 @@ export function DetailPanel() {
       icon: ScrollText,
       label: 'History',
       tooltip: 'History - Historical metric data over time'
+    },
+    {
+      id: 'messages',
+      icon: MessageSquare,
+      label: `Messages (${entityLogs.length})`,
+      tooltip: `Messages - MQTT message history (${entityLogs.length})`
     },
     {
       id: 'templates',
@@ -460,6 +502,14 @@ export function DetailPanel() {
             Device history tracking not yet implemented.
             Please select a node to view metric history.
           </div>
+        )}
+
+        {/* Messages Tab */}
+        {activeTab === 'messages' && (
+          <MessageHistoryTab
+            logs={entityLogs}
+            entityType={isNode ? 'node' : 'device'}
+          />
         )}
 
         {/* Templates Tab */}
