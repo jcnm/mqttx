@@ -564,8 +564,13 @@ export const useSimulatorStore = create<SimulatorState>()(
             state: 'stopped',
             position: { x: 100, y: 100 },
             config: {
-              ...eonConfig.config,
+              groupId: eonConfig.config.groupId || 'Demo',
               edgeNodeId: 'Demo_PumpStation_01',
+              protocol: eonConfig.config.protocol || 'SparkplugB',
+              sparkplugConfig: eonConfig.config.sparkplugConfig,
+              lifecycle: eonConfig.config.lifecycle,
+              network: eonConfig.config.network,
+              persistence: eonConfig.config.persistence,
             },
             metrics: eonConfig.metrics || [],
             devices: (eonConfig.devices || []).map((d: any, i: number) => ({
@@ -584,8 +589,13 @@ export const useSimulatorStore = create<SimulatorState>()(
             state: 'stopped',
             position: { x: 400, y: 100 },
             config: {
-              ...eonConfig.config,
+              groupId: eonConfig.config.groupId || 'Demo',
               edgeNodeId: 'Demo_HVAC_01',
+              protocol: eonConfig.config.protocol || 'SparkplugB',
+              sparkplugConfig: eonConfig.config.sparkplugConfig,
+              lifecycle: eonConfig.config.lifecycle,
+              network: eonConfig.config.network,
+              persistence: eonConfig.config.persistence,
             },
             metrics: eonConfig.metrics || [],
             devices: (eonConfig.devices || []).map((d: any, i: number) => ({
