@@ -278,26 +278,28 @@ export class BrokerMonitor extends EventEmitter {
           metricCount: decoded.metrics?.length || 0,
         };
 
-        // Update session Sparkplug state
-        if (parsed.messageType === MessageType.NBIRTH) {
-          const bdSeq = getBdSeq(decoded);
-          if (bdSeq !== null) {
-            session.sparkplugState = {
-              groupId: parsed.groupId,
-              edgeNodeId: parsed.edgeNodeId,
-              bdSeq: BigInt(bdSeq),
-              expectedSeq: 0n,
-              ndeathPublished: false,
-              birthTimestamp: Date.now(),
-            };
-          }
-        } else if (parsed.messageType === MessageType.NDEATH) {
-          if (session.sparkplugState) {
-            session.sparkplugState.ndeathPublished = true;
-          }
-        } else if (parsed.messageType === MessageType.NDATA && session.sparkplugState) {
-          if (decoded.seq !== undefined) {
-            session.sparkplugState.expectedSeq = (BigInt(decoded.seq) + 1n) % 256n;
+        // Update session Sparkplug state (only if this is a client message, not broker-published)
+        if (session) {
+          if (parsed.messageType === MessageType.NBIRTH) {
+            const bdSeq = getBdSeq(decoded);
+            if (bdSeq !== null) {
+              session.sparkplugState = {
+                groupId: parsed.groupId,
+                edgeNodeId: parsed.edgeNodeId,
+                bdSeq: BigInt(bdSeq),
+                expectedSeq: 0n,
+                ndeathPublished: false,
+                birthTimestamp: Date.now(),
+              };
+            }
+          } else if (parsed.messageType === MessageType.NDEATH) {
+            if (session.sparkplugState) {
+              session.sparkplugState.ndeathPublished = true;
+            }
+          } else if (parsed.messageType === MessageType.NDATA && session.sparkplugState) {
+            if (decoded.seq !== undefined) {
+              session.sparkplugState.expectedSeq = (BigInt(decoded.seq) + 1n) % 256n;
+            }
           }
         }
       } catch (error) {
