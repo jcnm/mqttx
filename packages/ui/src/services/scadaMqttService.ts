@@ -44,6 +44,10 @@ class ScadaMqttService {
 
     console.log('🔌 [SCADA MQTT] Connecting to broker:', brokerUrl);
 
+    // Convert string to Uint8Array for browser compatibility (no Buffer API)
+    const encoder = new TextEncoder();
+    const willPayload = encoder.encode('OFFLINE');
+
     const client = mqtt.connect(brokerUrl, {
       clientId: `scada-host-${Math.random().toString(16).slice(2, 8)}`,
       clean: true,
@@ -53,7 +57,7 @@ class ScadaMqttService {
       // Sparkplug B: Will message for STATE = OFFLINE
       will: {
         topic: `STATE/${this.state.scadaHostId}`,
-        payload: Buffer.from('OFFLINE'),
+        payload: willPayload,
         qos: 1,
         retain: true,
       },
@@ -148,7 +152,9 @@ class ScadaMqttService {
     }
 
     const topic = `STATE/${this.state.scadaHostId}`;
-    const payload = Buffer.from(state);
+    // Use TextEncoder instead of Buffer for browser compatibility
+    const encoder = new TextEncoder();
+    const payload = encoder.encode(state);
 
     this.state.client.publish(
       topic,
