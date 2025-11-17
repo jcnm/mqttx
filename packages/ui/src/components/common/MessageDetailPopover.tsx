@@ -26,7 +26,7 @@ export function MessageDetailPopover({ log, messageNumber, onClose }: MessageDet
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-[90vw] max-w-6xl h-[85vh] bg-slate-900 rounded-xl shadow-2xl border border-slate-700 flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900">
