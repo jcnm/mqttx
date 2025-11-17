@@ -79,11 +79,7 @@ function App() {
       // Initialize demo configuration with sample nodes
       initializeDemo();
 
-      // Auto-start simulation after a short delay to ensure everything is connected
-      setTimeout(() => {
-        console.log('🚀 Auto-starting simulation...');
-        startSimulation();
-      }, 2000);
+      // Don't auto-start - user must manually start simulation
     }
 
     // 3. Initialize Broker WebSocket for real-time monitoring

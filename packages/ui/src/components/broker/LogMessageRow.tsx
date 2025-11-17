@@ -109,14 +109,17 @@ export function LogMessageRow({ log }: LogMessageRowProps) {
               )}
             </div>
 
-            {/* Client ID and Topic */}
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-blue-400 font-mono">{log.clientId}</span>
+            {/* Client ID and Topic - separate lines for clarity */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-slate-500 text-xs">Client:</span>
+                <span className="text-blue-400 font-mono">{log.clientId}</span>
+              </div>
               {log.topic && (
-                <>
-                  <span className="text-slate-600">→</span>
-                  <span className="text-yellow-400 font-mono truncate">{log.topic}</span>
-                </>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-slate-500 text-xs">Topic:</span>
+                  <span className="text-yellow-400 font-mono break-all">{log.topic}</span>
+                </div>
               )}
             </div>
           </div>

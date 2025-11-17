@@ -151,9 +151,36 @@ export class BrokerWebSocketService {
   }
 
   /**
+   * Extract Sparkplug message type from topic
+   * Topic format: spBv1.0/{groupId}/{messageType}/{edgeNodeId}[/{deviceId}]
+   * STATE format: STATE/{scadaHostId}
+   */
+  private extractMessageType(topic: string | undefined): string | undefined {
+    if (!topic) return undefined;
+
+    // Handle STATE messages
+    if (topic.startsWith('STATE/')) {
+      return 'STATE';
+    }
+
+    // Handle Sparkplug B messages
+    if (topic.startsWith('spBv1.0/')) {
+      const parts = topic.split('/');
+      if (parts.length >= 3) {
+        return parts[2]; // NBIRTH, NDATA, NDEATH, DBIRTH, DDATA, DDEATH, NCMD, DCMD
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
    * Convert backend log to frontend format
    */
   private convertLog(backendLog: any): BrokerLog {
+    // Extract messageType from topic if backend doesn't provide it
+    const messageType = backendLog.messageType || this.extractMessageType(backendLog.topic);
+
     return {
       id: backendLog.id,
       timestamp: backendLog.timestamp,
@@ -162,7 +189,7 @@ export class BrokerWebSocketService {
       topic: backendLog.topic,
       qos: backendLog.qos,
       retain: backendLog.retain,
-      messageType: backendLog.messageType,
+      messageType,
       payload: backendLog.payload,
       decoded: backendLog.decoded,
       origin: backendLog.origin || { ip: 'unknown', port: 0 },
