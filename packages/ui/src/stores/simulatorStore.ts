@@ -559,52 +559,60 @@ export const useSimulatorStore = create<SimulatorState>()(
 
         if (template1 && Array.isArray(template1.config) && template1.config.length > 0) {
           const eonConfig = template1.config[0];
-          const demoNode1: SimulatedEoN = {
-            id: `eon-${Date.now()}-1`,
-            state: 'stopped',
-            position: { x: 100, y: 100 },
-            config: {
-              groupId: eonConfig.config.groupId || 'Demo',
-              edgeNodeId: 'Demo_PumpStation_01',
-              protocol: eonConfig.config.protocol || 'SparkplugB',
-              sparkplugConfig: eonConfig.config.sparkplugConfig,
-              lifecycle: eonConfig.config.lifecycle,
-              network: eonConfig.config.network,
-              persistence: eonConfig.config.persistence,
-            },
-            metrics: eonConfig.metrics || [],
-            devices: (eonConfig.devices || []).map((d: any, i: number) => ({
-              ...d,
-              id: `device-${Date.now()}-${i}`,
-            })),
-          };
-          state.nodes.set(demoNode1.id, demoNode1);
-          console.log('✅ Created demo node:', demoNode1.config.edgeNodeId);
+          if (!eonConfig.config) {
+            console.warn('⚠️  Template config is undefined, skipping node 1');
+          } else {
+            const demoNode1: SimulatedEoN = {
+              id: `eon-${Date.now()}-1`,
+              state: 'stopped',
+              position: { x: 100, y: 100 },
+              config: {
+                groupId: eonConfig.config.groupId || 'Demo',
+                edgeNodeId: 'Demo_PumpStation_01',
+                protocol: eonConfig.config.protocol || 'SparkplugB',
+                sparkplugConfig: eonConfig.config.sparkplugConfig,
+                lifecycle: eonConfig.config.lifecycle,
+                network: eonConfig.config.network,
+                persistence: eonConfig.config.persistence,
+              },
+              metrics: eonConfig.metrics || [],
+              devices: (eonConfig.devices || []).map((d: any, i: number) => ({
+                ...d,
+                id: `device-${Date.now()}-${i}`,
+              })),
+            };
+            state.nodes.set(demoNode1.id, demoNode1);
+            console.log('✅ Created demo node:', demoNode1.config.edgeNodeId);
+          }
         }
 
         if (template2 && Array.isArray(template2.config) && template2.config.length > 0) {
           const eonConfig = template2.config[0];
-          const demoNode2: SimulatedEoN = {
-            id: `eon-${Date.now()}-2`,
-            state: 'stopped',
-            position: { x: 400, y: 100 },
-            config: {
-              groupId: eonConfig.config.groupId || 'Demo',
-              edgeNodeId: 'Demo_HVAC_01',
-              protocol: eonConfig.config.protocol || 'SparkplugB',
-              sparkplugConfig: eonConfig.config.sparkplugConfig,
-              lifecycle: eonConfig.config.lifecycle,
-              network: eonConfig.config.network,
-              persistence: eonConfig.config.persistence,
-            },
-            metrics: eonConfig.metrics || [],
-            devices: (eonConfig.devices || []).map((d: any, i: number) => ({
-              ...d,
-              id: `device-${Date.now() + 1000}-${i}`,
-            })),
-          };
-          state.nodes.set(demoNode2.id, demoNode2);
-          console.log('✅ Created demo node:', demoNode2.config.edgeNodeId);
+          if (!eonConfig.config) {
+            console.warn('⚠️  Template config is undefined, skipping node 2');
+          } else {
+            const demoNode2: SimulatedEoN = {
+              id: `eon-${Date.now()}-2`,
+              state: 'stopped',
+              position: { x: 400, y: 100 },
+              config: {
+                groupId: eonConfig.config.groupId || 'Demo',
+                edgeNodeId: 'Demo_HVAC_01',
+                protocol: eonConfig.config.protocol || 'SparkplugB',
+                sparkplugConfig: eonConfig.config.sparkplugConfig,
+                lifecycle: eonConfig.config.lifecycle,
+                network: eonConfig.config.network,
+                persistence: eonConfig.config.persistence,
+              },
+              metrics: eonConfig.metrics || [],
+              devices: (eonConfig.devices || []).map((d: any, i: number) => ({
+                ...d,
+                id: `device-${Date.now() + 1000}-${i}`,
+              })),
+            };
+            state.nodes.set(demoNode2.id, demoNode2);
+            console.log('✅ Created demo node:', demoNode2.config.edgeNodeId);
+          }
         }
 
         // Update stats
