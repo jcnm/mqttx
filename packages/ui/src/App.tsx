@@ -21,7 +21,7 @@ function App() {
   const { addLog } = useBrokerStore();
   const { getBrokerUrl } = useSettingsStore();
   const { user, checkAuth } = useAuthStore();
-  const { initializeDemo, startSimulation } = useSimulatorStore();
+  const { initializeDemo } = useSimulatorStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [scadaConnected, setScadaConnected] = useState(false);
