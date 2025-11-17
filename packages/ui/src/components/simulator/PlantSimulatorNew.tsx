@@ -126,14 +126,16 @@ export function PlantSimulatorNew() {
   // Control simulation based on isRunning state
   useEffect(() => {
     if (!simulationEngine) {
-      console.error('❌ Simulation engine not initialized!');
+      // Engine not yet initialized - this is normal on first render
+      // App.tsx will initialize it in its useEffect
+      console.log('⏳ Waiting for simulation engine to initialize...');
       return;
     }
 
     // Get the stats callback from the service
     const statsCallback = simulationService.getStatsCallback();
     if (!statsCallback) {
-      console.error('❌ Stats callback not set!');
+      console.warn('⚠️  Stats callback not set yet');
       return;
     }
 
