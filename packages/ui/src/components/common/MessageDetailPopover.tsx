@@ -16,6 +16,12 @@ interface MessageDetailPopoverProps {
 
 type DetailTab = 'overview' | 'layers' | 'raw' | 'ascii' | 'structure';
 
+// Helper function to extract message type from Sparkplug topic
+function extractMessageType(topic: string): string {
+  const match = topic.match(/spBv1\.0\/[^/]+\/([^/]+)\//);
+  return match ? match[1] : 'UNKNOWN';
+}
+
 export function MessageDetailPopover({ log, messageNumber, onClose }: MessageDetailPopoverProps) {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
 
@@ -87,23 +93,27 @@ function OverviewTab({ log }: { log: BrokerLog }) {
       {/* Message Info Card */}
       <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
         <h3 className="text-lg font-semibold text-white mb-4">Message Information</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <InfoRow label="Timestamp" value={new Date(log.timestamp).toISOString()} />
-          <InfoRow
-            label="Client ID"
-            value={log.clientId}
-            highlight={log.clientId === 'broker' ? 'orange' : undefined}
-          />
-          <InfoRow label="Topic" value={log.topic || 'N/A'} />
-          <InfoRow label="Message Type" value={log.messageType || 'Unknown'} />
-          <InfoRow label="QoS" value={log.qos?.toString() || '0'} />
-          <InfoRow label="Retain" value={log.retain ? 'Yes' : 'No'} />
-          <InfoRow label="Payload Size" value={`${log.payload?.length || 0} bytes`} />
-          <InfoRow
-            label="Origin"
-            value={log.origin.ip === 'broker' ? 'Broker (auto-published)' : `${log.origin.ip}:${log.origin.port}`}
-            highlight={log.origin.ip === 'broker' ? 'orange' : undefined}
-          />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-4">
+            <InfoRow label="Timestamp" value={new Date(log.timestamp).toISOString()} />
+            <InfoRow
+              label="Client ID"
+              value={log.clientId}
+              highlight={log.clientId === 'broker' ? 'orange' : undefined}
+            />
+          </div>
+          <InfoRow label="Topic" value={log.topic || 'N/A'} block={true} />
+          <div className="grid grid-cols-2 gap-4">
+            <InfoRow label="Message Type" value={log.messageType || extractMessageType(log.topic || '')} />
+            <InfoRow label="QoS" value={log.qos?.toString() || '0'} />
+            <InfoRow label="Retain" value={log.retain ? 'Yes' : 'No'} />
+            <InfoRow label="Payload Size" value={`${log.payload?.length || 0} bytes`} />
+            <InfoRow
+              label="Origin"
+              value={log.origin.ip === 'broker' ? 'Broker (auto-published)' : `${log.origin.ip}:${log.origin.port}`}
+              highlight={log.origin.ip === 'broker' ? 'orange' : undefined}
+            />
+          </div>
         </div>
 
         {/* Will Testament Info */}
@@ -187,11 +197,6 @@ function LayersTab({ log }: { log: BrokerLog }) {
       newExpanded.add(layer);
     }
     setExpandedLayers(newExpanded);
-  };
-
-  const extractMessageType = (topic: string): string => {
-    const match = topic.match(/spBv1\.0\/[^/]+\/([^/]+)\//);
-    return match ? match[1] : 'UNKNOWN';
   };
 
   return (
@@ -431,12 +436,21 @@ function StructureTab({ log }: { log: BrokerLog }) {
 }
 
 // Helper Components
-function InfoRow({ label, value, highlight }: { label: string; value: string; highlight?: 'orange' | 'blue' | 'green' }) {
+function InfoRow({ label, value, highlight, block }: { label: string; value: string; highlight?: 'orange' | 'blue' | 'green'; block?: boolean }) {
   const highlightColors = {
     orange: 'text-orange-400',
     blue: 'text-blue-400',
     green: 'text-green-400',
   };
+
+  if (block) {
+    return (
+      <div className="text-sm py-1 space-y-1">
+        <div className="text-slate-400">{label}:</div>
+        <div className={`font-mono break-all ${highlight ? highlightColors[highlight] : 'text-slate-200'}`}>{value}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex justify-between text-sm py-1">
