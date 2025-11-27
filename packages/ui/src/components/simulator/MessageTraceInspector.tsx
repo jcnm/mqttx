@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import type { MessageTrace } from '../../types/message-trace.types';
+import { Package, BarChart3, Search, Hash, Ruler, Radio, CheckCircle, ClipboardList } from 'lucide-react';
 
 interface MessageTraceInspectorProps {
   trace: MessageTrace;
@@ -39,7 +40,9 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
     return (
       <div className="space-y-4">
         <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <h4 className="text-sm font-semibold text-white mb-3">📦 Sparkplug B Payload Structure</h4>
+          <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <Package className="w-4 h-4" /> Sparkplug B Payload Structure
+          </h4>
           <div className="space-y-2">
             <InfoRow label="Timestamp" value={format(Number(timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')} />
             <InfoRow label="Sequence Number" value={String(seq)} />
@@ -50,7 +53,9 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
 
         {payload.metrics && payload.metrics.length > 0 && (
           <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-            <h4 className="text-sm font-semibold text-white mb-3">📊 Metrics ({payload.metrics.length})</h4>
+            <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" /> Metrics ({payload.metrics.length})
+            </h4>
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {payload.metrics.map((metric: any, index: number) => (
                 <div key={index} className="bg-slate-900 rounded-lg p-3 border border-slate-600">
@@ -79,7 +84,9 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
         )}
 
         <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <h4 className="text-sm font-semibold text-white mb-3">🔍 Full Payload JSON</h4>
+          <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <Search className="w-4 h-4" /> Full Payload JSON
+          </h4>
           <pre className="text-xs text-slate-300 bg-slate-950 p-3 rounded overflow-x-auto max-h-64">
             {JSON.stringify(payload, null, 2)}
           </pre>
@@ -103,7 +110,9 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
     return (
       <div className="space-y-4">
         <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <h4 className="text-sm font-semibold text-white mb-3">📦 Encoded Binary Data (Protobuf)</h4>
+          <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <Package className="w-4 h-4" /> Encoded Binary Data (Protobuf)
+          </h4>
           <div className="space-y-2">
             <InfoRow label="Size" value={`${sizeBytes} bytes`} color="blue" />
             <InfoRow label="Format" value="Protocol Buffers (Sparkplug B)" />
@@ -112,7 +121,9 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
         </div>
 
         <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <h4 className="text-sm font-semibold text-white mb-3">🔢 Hexadecimal Representation</h4>
+          <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <Hash className="w-4 h-4" /> Hexadecimal Representation
+          </h4>
           <div className="bg-slate-950 p-3 rounded overflow-x-auto max-h-96">
             <pre className="text-xs text-emerald-400 font-mono">
               {hexRows.map((row, index) => (
@@ -126,7 +137,9 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
         </div>
 
         <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <h4 className="text-sm font-semibold text-white mb-3">📏 Size Analysis</h4>
+          <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <Ruler className="w-4 h-4" /> Size Analysis
+          </h4>
           <div className="space-y-2">
             <InfoRow label="Original Metrics" value={String(trace.preEncoding.metricCount)} />
             <InfoRow label="Encoded Size" value={`${sizeBytes} bytes`} />
@@ -143,7 +156,9 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
     return (
       <div className="space-y-4">
         <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <h4 className="text-sm font-semibold text-white mb-3">📡 MQTT Transmission Details</h4>
+          <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <Radio className="w-4 h-4" /> MQTT Transmission Details
+          </h4>
           <div className="space-y-2">
             <InfoRow label="Topic" value={trace.topic} />
             <InfoRow label="QoS Level" value={String(trace.qos)} />
@@ -154,7 +169,9 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
         </div>
 
         <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <h4 className="text-sm font-semibold text-white mb-3">✅ Status</h4>
+          <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4" /> Status
+          </h4>
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               <span className="text-sm text-slate-400">Status:</span>
@@ -180,7 +197,9 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
         </div>
 
         <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <h4 className="text-sm font-semibold text-white mb-3">📋 Sparkplug Hierarchy</h4>
+          <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <ClipboardList className="w-4 h-4" /> Sparkplug Hierarchy
+          </h4>
           <div className="space-y-2">
             <InfoRow label="Group ID" value={trace.groupId} />
             <InfoRow label="Edge Node ID" value={trace.edgeNodeId} />
@@ -199,7 +218,9 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
         <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h2 className="text-xl font-bold text-white">🔍 Message Trace Inspector</h2>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Search className="w-5 h-5" /> Message Trace Inspector
+              </h2>
               <span className="text-xs font-mono text-blue-400 font-semibold">#{messageNumber}</span>
               <span className={`px-2 py-0.5 text-xs rounded border font-semibold ${getMessageTypeColor(trace.messageType)}`}>
                 {trace.messageType}
@@ -221,33 +242,33 @@ export function MessageTraceInspector({ trace, messageNumber, onClose }: Message
         <div className="px-6 py-3 border-b border-slate-700 flex gap-2">
           <button
             onClick={() => setActiveTab('pre')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
               activeTab === 'pre'
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
             }`}
           >
-            📦 Pre-Encoding
+            <Package className="w-4 h-4" /> Pre-Encoding
           </button>
           <button
             onClick={() => setActiveTab('post')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
               activeTab === 'post'
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
             }`}
           >
-            🔢 Post-Encoding
+            <Hash className="w-4 h-4" /> Post-Encoding
           </button>
           <button
             onClick={() => setActiveTab('transmission')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
               activeTab === 'transmission'
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
             }`}
           >
-            📡 Transmission
+            <Radio className="w-4 h-4" /> Transmission
           </button>
         </div>
 

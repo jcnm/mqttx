@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import type { Session } from '../../types/broker.types';
+import { Users, Zap, AlertTriangle, Check, type LucideIcon } from 'lucide-react';
 
 interface SessionViewerProps {
   sessions: Session[];
@@ -32,25 +33,25 @@ export function SessionViewer({ sessions }: SessionViewerProps) {
         <StatCard
           title="Total Sessions"
           value={sessions.length}
-          icon="👥"
+          icon={Users}
           color="blue"
         />
         <StatCard
           title="Sparkplug Nodes"
           value={sparkplugSessions}
-          icon="⚡"
+          icon={Zap}
           color="green"
         />
         <StatCard
           title="Stale Sessions"
           value={staleSessions}
-          icon="⚠️"
+          icon={AlertTriangle}
           color={staleSessions > 0 ? 'red' : 'gray'}
         />
         <StatCard
           title="Active (Fresh)"
           value={sessions.length - staleSessions}
-          icon="✓"
+          icon={Check}
           color="emerald"
         />
       </div>
@@ -59,23 +60,23 @@ export function SessionViewer({ sessions }: SessionViewerProps) {
       <div className="flex gap-2">
         <button
           onClick={() => setFilterStale(!filterStale)}
-          className={`px-3 py-1.5 text-sm rounded transition-colors ${
+          className={`px-3 py-1.5 text-sm rounded transition-colors flex items-center gap-1 ${
             filterStale
               ? 'bg-red-600 text-white'
               : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
           }`}
         >
-          {filterStale ? '✓' : ''} Show Only Stale
+          {filterStale && <Check className="w-3 h-3" />} Show Only Stale
         </button>
         <button
           onClick={() => setFilterSparkplug(!filterSparkplug)}
-          className={`px-3 py-1.5 text-sm rounded transition-colors ${
+          className={`px-3 py-1.5 text-sm rounded transition-colors flex items-center gap-1 ${
             filterSparkplug
               ? 'bg-green-600 text-white'
               : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
           }`}
         >
-          {filterSparkplug ? '✓' : ''} Show Only Sparkplug
+          {filterSparkplug && <Check className="w-3 h-3" />} Show Only Sparkplug
         </button>
       </div>
 
@@ -102,10 +103,10 @@ export function SessionViewer({ sessions }: SessionViewerProps) {
   );
 }
 
-function StatCard({ title, value, icon, color }: {
+function StatCard({ title, value, icon: Icon, color }: {
   title: string;
   value: number;
-  icon: string;
+  icon: LucideIcon;
   color: string;
 }) {
   const colorClasses: Record<string, string> = {
@@ -123,7 +124,7 @@ function StatCard({ title, value, icon, color }: {
           <div className="text-2xl font-bold">{value}</div>
           <div className="text-sm opacity-80">{title}</div>
         </div>
-        <div className="text-3xl">{icon}</div>
+        <Icon className="w-8 h-8" />
       </div>
     </div>
   );
@@ -160,14 +161,14 @@ function SessionCard({ session, isExpanded, onToggle }: {
 
               {/* Status Badges */}
               {session.isStale && (
-                <span className="px-2 py-0.5 text-xs rounded bg-red-600 text-white">
-                  ⚠️ STALE
+                <span className="px-2 py-0.5 text-xs rounded bg-red-600 text-white flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> STALE
                 </span>
               )}
 
               {session.sparkplugState && (
-                <span className="px-2 py-0.5 text-xs rounded bg-green-600 text-white">
-                  ⚡ Sparkplug
+                <span className="px-2 py-0.5 text-xs rounded bg-green-600 text-white flex items-center gap-1">
+                  <Zap className="w-3 h-3" /> Sparkplug
                 </span>
               )}
 
@@ -239,7 +240,7 @@ function SessionCard({ session, isExpanded, onToggle }: {
             <InfoRow label="Protocol Version" value={getProtocolVersion(session.protocolVersion)} />
             <InfoRow label="Clean Session" value={session.cleanSession ? 'Yes' : 'No'} />
             <InfoRow label="Session Expiry" value={`${session.sessionExpiry}s`} />
-            <InfoRow label="Is Stale" value={session.isStale ? 'Yes ⚠️' : 'No ✓'} />
+            <InfoRow label="Is Stale" value={session.isStale ? 'Yes' : 'No'} />
           </Section>
 
           {/* Statistics */}

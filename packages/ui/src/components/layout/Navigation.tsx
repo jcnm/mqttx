@@ -4,11 +4,12 @@
  */
 
 import { NavLink } from 'react-router-dom';
+import { BarChart3, Plug, Settings, Radio, type LucideIcon } from 'lucide-react';
 
 interface NavItem {
   path: string;
   label: string;
-  icon: string;
+  icon: LucideIcon;
   description: string;
 }
 
@@ -16,25 +17,25 @@ const navItems: NavItem[] = [
   {
     path: '/scada',
     label: 'SCADA',
-    icon: '📊',
+    icon: BarChart3,
     description: 'Real-time monitoring of EoN nodes and devices',
   },
   {
     path: '/broker',
     label: 'Broker',
-    icon: '🔌',
+    icon: Plug,
     description: 'Broker logs, sessions, and configuration',
   },
   {
     path: '/simulator',
     label: 'Simulator',
-    icon: '⚙️',
+    icon: Settings,
     description: 'Graphical plant simulator designer',
   },
   {
     path: '/commands',
     label: 'Commands',
-    icon: '📡',
+    icon: Radio,
     description: 'Device control and command scheduling',
   },
 ];
@@ -56,7 +57,7 @@ export function Navigation() {
             }
             title={item.description}
           >
-            <span className="text-lg">{item.icon}</span>
+            <item.icon className="w-5 h-5" />
             <span>{item.label}</span>
           </NavLink>
         ))}

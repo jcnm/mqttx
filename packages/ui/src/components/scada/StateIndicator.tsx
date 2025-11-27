@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { useMQTTStore } from '../../stores/mqttStore';
+import { Monitor, Check, AlertTriangle } from 'lucide-react';
 
 interface HostState {
   online: boolean;
@@ -93,7 +94,7 @@ export function StateIndicator() {
   return (
     <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
       <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-        <span>🖥️</span>
+        <Monitor className="w-4 h-4" />
         Host Application State
       </h4>
 
@@ -161,10 +162,12 @@ export function StateIndicator() {
 
       {/* Info Footer */}
       <div className="mt-3 pt-3 border-t border-slate-700">
-        <p className="text-xs text-slate-500">
-          {primaryHost && primaryHost.online
-            ? '✓ Primary host is active'
-            : '⚠️ No active primary host - system may be offline'}
+        <p className="text-xs text-slate-500 flex items-center gap-1">
+          {primaryHost && primaryHost.online ? (
+            <><Check className="w-3 h-3" /> Primary host is active</>
+          ) : (
+            <><AlertTriangle className="w-3 h-3" /> No active primary host - system may be offline</>
+          )}
         </p>
       </div>
     </div>

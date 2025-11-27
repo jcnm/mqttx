@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { alarmManager, AlarmSeverity, AlarmState } from '../../services/alarmSystem';
 import type { Alarm, AlarmThreshold } from '../../services/alarmSystem';
+import { AlertCircle, AlertTriangle, Info, CheckCircle, Check } from 'lucide-react';
 
 export function AlarmPanel() {
   const [activeAlarms, setActiveAlarms] = useState<Alarm[]>([]);
@@ -54,11 +55,11 @@ export function AlarmPanel() {
   const getSeverityIcon = (severity: AlarmSeverity) => {
     switch (severity) {
       case AlarmSeverity.CRITICAL:
-        return '🚨';
+        return <AlertCircle className="w-5 h-5 text-red-400" />;
       case AlarmSeverity.WARNING:
-        return '⚠️';
+        return <AlertTriangle className="w-5 h-5 text-amber-400" />;
       case AlarmSeverity.INFO:
-        return 'ℹ️';
+        return <Info className="w-5 h-5 text-blue-400" />;
     }
   };
 
@@ -121,7 +122,7 @@ export function AlarmPanel() {
 
         {activeAlarms.length === 0 ? (
           <div className="text-center py-8 text-slate-400">
-            <div className="text-4xl mb-2">✅</div>
+            <CheckCircle className="w-10 h-10 mx-auto mb-2 text-emerald-400" />
             <p>No active alarms</p>
           </div>
         ) : (
@@ -138,7 +139,7 @@ export function AlarmPanel() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xl">{getSeverityIcon(alarm.severity)}</span>
+                      {getSeverityIcon(alarm.severity)}
                       <span
                         className={`px-2 py-0.5 text-xs font-bold rounded ${getSeverityColor(
                           alarm.severity
@@ -156,8 +157,8 @@ export function AlarmPanel() {
                       {alarm.threshold})
                     </p>
                     {alarm.state === AlarmState.ACKNOWLEDGED && (
-                      <p className="text-xs text-emerald-400 mt-1">
-                        ✓ Acknowledged by {alarm.acknowledgedBy} at{' '}
+                      <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Acknowledged by {alarm.acknowledgedBy} at{' '}
                         {alarm.acknowledgedAt && format(alarm.acknowledgedAt, 'HH:mm:ss')}
                       </p>
                     )}
@@ -195,7 +196,7 @@ export function AlarmPanel() {
                   className="bg-slate-800 border border-slate-700 rounded-lg p-3"
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm">{getSeverityIcon(alarm.severity)}</span>
+                    {getSeverityIcon(alarm.severity)}
                     <span className="text-xs text-slate-400">
                       {format(alarm.triggeredAt, 'yyyy-MM-dd HH:mm:ss')}
                     </span>

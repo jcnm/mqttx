@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { formatMetricValue, getDatatypeName } from '../../services/sparkplugProcessor';
 import type { BrokerLog } from '../../types/broker.types';
+import { Search, BarChart3, Globe, Hash, FileText, Layers, X, AlertTriangle, Zap, Lightbulb, Mail } from 'lucide-react';
 
 interface MessageDetailPopoverProps {
   log: BrokerLog;
@@ -32,7 +33,7 @@ export function MessageDetailPopover({ log, messageNumber, onClose }: MessageDet
         <div className="px-6 py-4 border-b border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="text-2xl">🔍</div>
+              <Search className="w-6 h-6 text-slate-300" />
               <div>
                 <h2 className="text-xl font-bold text-white">
                   Message Details
@@ -45,9 +46,9 @@ export function MessageDetailPopover({ log, messageNumber, onClose }: MessageDet
             </div>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors font-medium"
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
             >
-              ✕ Close
+              <X className="w-4 h-4" /> Close
             </button>
           </div>
         </div>
@@ -58,17 +59,17 @@ export function MessageDetailPopover({ log, messageNumber, onClose }: MessageDet
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
+              className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 flex items-center gap-2 ${
                 activeTab === tab
                   ? 'border-blue-500 text-blue-400'
                   : 'border-transparent text-slate-400 hover:text-slate-300'
               }`}
             >
-              {tab === 'overview' && '📊 Overview'}
-              {tab === 'layers' && '🌐 Protocol Layers'}
-              {tab === 'raw' && '🔢 Hex View'}
-              {tab === 'ascii' && '📝 ASCII'}
-              {tab === 'structure' && '🏗️ Structure'}
+              {tab === 'overview' && <><BarChart3 className="w-4 h-4" /> Overview</>}
+              {tab === 'layers' && <><Globe className="w-4 h-4" /> Protocol Layers</>}
+              {tab === 'raw' && <><Hash className="w-4 h-4" /> Hex View</>}
+              {tab === 'ascii' && <><FileText className="w-4 h-4" /> ASCII</>}
+              {tab === 'structure' && <><Layers className="w-4 h-4" /> Structure</>}
             </button>
           ))}
         </div>
@@ -119,7 +120,9 @@ function OverviewTab({ log }: { log: BrokerLog }) {
         {/* Will Testament Info */}
         {log.sessionInfo?.lastWillTopic && (
           <div className="mt-4 pt-4 border-t border-slate-700">
-            <div className="text-sm font-medium text-yellow-400 mb-2">⚠️ Last Will Testament Configured</div>
+            <div className="text-sm font-medium text-yellow-400 mb-2 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> Last Will Testament Configured
+            </div>
             <InfoRow label="Will Topic" value={log.sessionInfo.lastWillTopic} />
           </div>
         )}
@@ -128,7 +131,9 @@ function OverviewTab({ log }: { log: BrokerLog }) {
       {/* Sparkplug Metadata (if available) */}
       {log.sparkplugMetadata && (
         <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">⚡ Sparkplug B Metadata</h3>
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <Zap className="w-5 h-5" /> Sparkplug B Metadata
+          </h3>
           <div className="grid grid-cols-2 gap-4">
             {log.sparkplugMetadata.groupId && <InfoRow label="Group ID" value={log.sparkplugMetadata.groupId} />}
             {log.sparkplugMetadata.edgeNodeId && <InfoRow label="Edge Node ID" value={log.sparkplugMetadata.edgeNodeId} />}
@@ -204,7 +209,7 @@ function LayersTab({ log }: { log: BrokerLog }) {
       {/* Layer 1: Network & Transport */}
       <LayerSection
         title="Layer 1: Network & Transport"
-        icon="🌐"
+        icon={<Globe className="w-5 h-5 text-slate-300" />}
         expanded={expandedLayers.has('layer1')}
         onToggle={() => toggleLayer('layer1')}
       >
@@ -220,7 +225,7 @@ function LayersTab({ log }: { log: BrokerLog }) {
       {/* Layer 2: MQTT */}
       <LayerSection
         title="Layer 2: MQTT (Message Queuing Telemetry Transport)"
-        icon="📨"
+        icon={<Mail className="w-5 h-5 text-slate-300" />}
         expanded={expandedLayers.has('layer2')}
         onToggle={() => toggleLayer('layer2')}
       >
@@ -242,7 +247,7 @@ function LayersTab({ log }: { log: BrokerLog }) {
       {/* Layer 3: Sparkplug B */}
       <LayerSection
         title="Layer 3: Sparkplug B (ISO/IEC 20237:2023)"
-        icon="⚡"
+        icon={<Zap className="w-5 h-5 text-slate-300" />}
         expanded={expandedLayers.has('layer3')}
         onToggle={() => toggleLayer('layer3')}
       >
@@ -412,7 +417,7 @@ function StructureTab({ log }: { log: BrokerLog }) {
       {metricsWithoutNames.length > 0 && (
         <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-6">
           <div className="flex items-start gap-3">
-            <div className="text-2xl">💡</div>
+            <Lightbulb className="w-6 h-6 text-blue-400 flex-shrink-0" />
             <div>
               <h4 className="text-white font-semibold mb-2">Sparkplug B Optimization Detected</h4>
               <p className="text-sm text-slate-300">
@@ -468,7 +473,7 @@ function LayerSection({
   children,
 }: {
   title: string;
-  icon: string;
+  icon: React.ReactNode;
   expanded: boolean;
   onToggle: () => void;
   children: React.ReactNode;
@@ -480,7 +485,7 @@ function LayerSection({
         className="w-full px-4 py-3 bg-slate-800 hover:bg-slate-750 flex items-center justify-between transition-colors"
       >
         <div className="flex items-center gap-3">
-          <span className="text-lg">{icon}</span>
+          {icon}
           <span className="font-medium text-white text-sm">{title}</span>
         </div>
         <svg

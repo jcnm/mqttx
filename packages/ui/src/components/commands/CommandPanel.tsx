@@ -12,6 +12,7 @@ import { ConnectionConfigPanel, type MQTTConnectionConfig } from './ConnectionCo
 import { TargetSelector, type CommandTarget } from './TargetSelector';
 import { SparkplugCommandBuilder, type SparkplugCommand } from './SparkplugCommandBuilder';
 import { commandTracker } from '../../services/commandTracker';
+import { Radio, ScrollText, Clock, type LucideIcon } from 'lucide-react';
 
 type Tab = 'send' | 'history' | 'scheduled';
 
@@ -286,10 +287,10 @@ export function CommandPanel() {
     };
   }, [mqttClient]);
 
-  const tabs = [
-    { id: 'send' as Tab, label: 'Send Command', icon: '📡' },
-    { id: 'history' as Tab, label: 'History', icon: '📜' },
-    { id: 'scheduled' as Tab, label: 'Scheduled', icon: '⏰' },
+  const tabs: { id: Tab; label: string; icon: LucideIcon }[] = [
+    { id: 'send' as Tab, label: 'Send Command', icon: Radio },
+    { id: 'history' as Tab, label: 'History', icon: ScrollText },
+    { id: 'scheduled' as Tab, label: 'Scheduled', icon: Clock },
   ];
 
   return (
@@ -307,11 +308,11 @@ export function CommandPanel() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
             <p className="text-slate-400 text-sm">Connection</p>
-            <p className="text-lg font-bold text-white">
+            <p className="text-lg font-bold text-white flex items-center gap-2">
               {mqttClient ? (
-                <span className="text-emerald-400">🟢 Connected</span>
+                <><span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" /> <span className="text-emerald-400">Connected</span></>
               ) : (
-                <span className="text-red-400">🔴 Disconnected</span>
+                <><span className="w-2.5 h-2.5 rounded-full bg-red-400" /> <span className="text-red-400">Disconnected</span></>
               )}
             </p>
           </div>
@@ -336,13 +337,13 @@ export function CommandPanel() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-3 text-sm font-medium transition-colors relative ${
+                className={`px-4 py-3 text-sm font-medium transition-colors relative flex items-center gap-2 ${
                   activeTab === tab.id
                     ? 'text-white bg-slate-900'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
                 }`}
               >
-                <span className="mr-2">{tab.icon}</span>
+                <tab.icon className="w-4 h-4" />
                 {tab.label}
                 {activeTab === tab.id && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />

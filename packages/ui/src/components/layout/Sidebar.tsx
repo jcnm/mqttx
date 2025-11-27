@@ -1,13 +1,21 @@
+import { BarChart3, GitBranch, Zap, type LucideIcon } from 'lucide-react';
+
 interface SidebarProps {
   activeView: string;
   onViewChange: (view: 'explorer' | 'scada' | 'commands') => void;
 }
 
+interface ViewItem {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+}
+
 export function Sidebar({ activeView, onViewChange }: SidebarProps) {
-  const views = [
-    { id: 'scada', label: 'SCADA Dashboard', icon: '📊' },
-    { id: 'explorer', label: 'Namespace Explorer', icon: '🌳' },
-    { id: 'commands', label: 'Command Panel', icon: '⚡' },
+  const views: ViewItem[] = [
+    { id: 'scada', label: 'SCADA Dashboard', icon: BarChart3 },
+    { id: 'explorer', label: 'Namespace Explorer', icon: GitBranch },
+    { id: 'commands', label: 'Command Panel', icon: Zap },
   ];
 
   return (
@@ -28,7 +36,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                   : 'text-slate-300 hover:bg-slate-700'
               }`}
             >
-              <span className="text-xl">{view.icon}</span>
+              <view.icon className="w-5 h-5" />
               <span className="font-medium">{view.label}</span>
             </button>
           ))}

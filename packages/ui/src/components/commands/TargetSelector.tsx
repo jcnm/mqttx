@@ -6,6 +6,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSimulatorStore } from '../../stores/simulatorStore';
 import { useSCADAStore } from '../../stores/scadaStore';
+import { ClipboardList, Sparkles, Zap, Radio } from 'lucide-react';
 
 export interface CommandTarget {
   mode: 'existing' | 'new';
@@ -144,17 +145,17 @@ export function TargetSelector({ target, onChange, allowDevice = true }: TargetS
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}
           >
-            📋 Existing Node
+            <ClipboardList className="w-4 h-4 inline mr-1" /> Existing Node
           </button>
           <button
             onClick={() => handleModeChange('new')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-1 ${
               showNewForm
                 ? 'bg-emerald-600 text-white'
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}
           >
-            ✨ New Node
+            <Sparkles className="w-4 h-4" /> New Node
           </button>
         </div>
       </div>
@@ -304,17 +305,17 @@ export function TargetSelector({ target, onChange, allowDevice = true }: TargetS
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}
           >
-            ⚡ Sparkplug B
+            <Zap className="w-4 h-4 inline mr-1" /> Sparkplug B
           </button>
           <button
             onClick={() => onChange({ ...target, protocol: 'RawMQTTv5' })}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-1 ${
               target.protocol === 'RawMQTTv5'
                 ? 'bg-blue-600 text-white'
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}
           >
-            📡 Raw MQTT v5
+            <Radio className="w-4 h-4" /> Raw MQTT v5
           </button>
         </div>
       </div>

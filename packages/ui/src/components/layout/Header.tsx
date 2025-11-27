@@ -1,16 +1,23 @@
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
+import { BarChart3, Plug, Settings, Radio, LogOut, type LucideIcon } from 'lucide-react';
 
 interface HeaderProps {
   isConnected: boolean;
   onOpenSettings?: () => void;
 }
 
-const navLinks = [
-  { path: '/scada', label: 'SCADA', icon: '📊' },
-  { path: '/broker', label: 'Broker', icon: '🔌' },
-  { path: '/simulator', label: 'Simulator', icon: '⚙️' },
-  { path: '/commands', label: 'Commands', icon: '📡' },
+interface NavLinkItem {
+  path: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+const navLinks: NavLinkItem[] = [
+  { path: '/scada', label: 'SCADA', icon: BarChart3 },
+  { path: '/broker', label: 'Broker', icon: Plug },
+  { path: '/simulator', label: 'Simulator', icon: Settings },
+  { path: '/commands', label: 'Commands', icon: Radio },
 ];
 
 export function Header({ isConnected, onOpenSettings }: HeaderProps) {
@@ -70,7 +77,7 @@ export function Header({ isConnected, onOpenSettings }: HeaderProps) {
                 className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                 title="Settings"
               >
-                <span>⚙️</span>
+                <Settings className="w-4 h-4" />
                 <span className="hidden sm:inline">Settings</span>
               </button>
             )}
@@ -81,7 +88,7 @@ export function Header({ isConnected, onOpenSettings }: HeaderProps) {
               className="px-3 py-2 bg-red-900/20 hover:bg-red-900/30 text-red-400 hover:text-red-300 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-red-800/30"
               title="Logout"
             >
-              <span>🚪</span>
+              <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
@@ -95,7 +102,7 @@ export function Header({ isConnected, onOpenSettings }: HeaderProps) {
               key={link.path}
               to={link.path}
               className={({ isActive }) =>
-                `px-4 py-3 text-sm font-medium transition-colors relative ${
+                `px-4 py-3 text-sm font-medium transition-colors relative flex items-center ${
                   isActive
                     ? 'text-white bg-slate-800'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -104,7 +111,7 @@ export function Header({ isConnected, onOpenSettings }: HeaderProps) {
             >
               {({ isActive }) => (
                 <>
-                  <span className="mr-2">{link.icon}</span>
+                  <link.icon className="w-4 h-4 mr-2" />
                   {link.label}
                   {isActive && (
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />
