@@ -1,9 +1,10 @@
 /**
  * SCADA MQTT Service
  * Dedicated MQTT client for SCADA Host Application
- * Implements Sparkplug B Host Application specification:
- * - Publishes STATE message on connect/disconnect
- * - Subscribes to all Sparkplug topics (spBv1.0/#)
+ * Implements Sparkplug B Host Application specification (ISO/IEC 20237:2023):
+ * - Publishes STATE message on connect/disconnect to spBv1.0/STATE/{hostId}
+ * - STATE payload is JSON: { online: boolean, timestamp: number }
+ * - Subscribes to all Sparkplug topics (spBv1.0/#) with QoS 1
  * - Can send NCMD/DCMD commands to EoN and devices
  * - STATE triggers broker to request rebirth from online devices
  */
@@ -11,6 +12,19 @@
 import mqtt, { type MqttClient } from 'mqtt';
 import { encodePayload } from '@sparkplug/codec';
 import type { BrokerLog } from '../types/broker.types';
+
+// Sparkplug B namespace prefix
+const SPARKPLUG_NAMESPACE = 'spBv1.0';
+
+/**
+ * Create a Sparkplug B compliant STATE payload
+ */
+function createStatePayload(online: boolean): string {
+  return JSON.stringify({
+    online,
+    timestamp: Date.now(),
+  });
+}
 
 interface ScadaMqttServiceState {
   client: MqttClient | null;
@@ -44,16 +58,19 @@ class ScadaMqttService {
 
     console.log('🔌 [SCADA MQTT] Connecting to broker:', brokerUrl);
 
+    // Sparkplug B STATE topic: spBv1.0/STATE/{hostId}
+    const stateTopic = `${SPARKPLUG_NAMESPACE}/STATE/${this.state.scadaHostId}`;
+
     const client = mqtt.connect(brokerUrl, {
       clientId: `scada-host-${Math.random().toString(16).slice(2, 8)}`,
       clean: true,
       reconnectPeriod: 5000,
       keepalive: 60,
       protocolVersion: 4, // MQTT v3.1.1
-      // Sparkplug B: Will message for STATE = OFFLINE
+      // Sparkplug B: Will message for STATE = OFFLINE (JSON payload with timestamp)
       will: {
-        topic: `STATE/${this.state.scadaHostId}`,
-        payload: 'OFFLINE',  // mqtt.js accepts strings directly
+        topic: stateTopic,
+        payload: createStatePayload(false),
         qos: 1,
         retain: true,
       },
@@ -67,23 +84,23 @@ class ScadaMqttService {
 
       // Sparkplug B: Publish STATE = ONLINE (retained)
       // This triggers the broker to request rebirth from all online EoN
-      this.publishState('ONLINE');
+      this.publishState(true);
 
-      // Subscribe to all Sparkplug B topics
-      client.subscribe('spBv1.0/#', { qos: 0 }, (err) => {
+      // Subscribe to all Sparkplug B topics with QoS 1 for reliable delivery
+      client.subscribe(`${SPARKPLUG_NAMESPACE}/#`, { qos: 1 }, (err) => {
         if (err) {
           console.error('❌ [SCADA MQTT] Failed to subscribe:', err);
         } else {
-          console.log('📥 [SCADA MQTT] Subscribed to spBv1.0/#');
+          console.log(`📥 [SCADA MQTT] Subscribed to ${SPARKPLUG_NAMESPACE}/# (QoS 1)`);
         }
       });
 
-      // Subscribe to STATE messages
-      client.subscribe(`STATE/#`, { qos: 0 }, (err) => {
+      // Subscribe to STATE messages (within Sparkplug namespace)
+      client.subscribe(`${SPARKPLUG_NAMESPACE}/STATE/#`, { qos: 1 }, (err) => {
         if (err) {
           console.error('❌ [SCADA MQTT] Failed to subscribe to STATE:', err);
         } else {
-          console.log('📥 [SCADA MQTT] Subscribed to STATE/#');
+          console.log(`📥 [SCADA MQTT] Subscribed to ${SPARKPLUG_NAMESPACE}/STATE/# (QoS 1)`);
         }
       });
     });
@@ -138,18 +155,19 @@ class ScadaMqttService {
   }
 
   /**
-   * Publish STATE message (ONLINE/OFFLINE)
-   * This is a Sparkplug B Host Application requirement
+   * Publish STATE message with JSON payload
+   * This is a Sparkplug B Host Application requirement (ISO/IEC 20237:2023)
+   * Topic format: spBv1.0/STATE/{hostId}
+   * Payload format: { online: boolean, timestamp: number }
    */
-  private publishState(state: 'ONLINE' | 'OFFLINE'): void {
+  private publishState(online: boolean): void {
     if (!this.state.client || !this.state.client.connected) {
       console.warn('⚠️  [SCADA MQTT] Cannot publish STATE: not connected');
       return;
     }
 
-    const topic = `STATE/${this.state.scadaHostId}`;
-    // mqtt.js accepts strings directly in the browser
-    const payload = state;
+    const topic = `${SPARKPLUG_NAMESPACE}/STATE/${this.state.scadaHostId}`;
+    const payload = createStatePayload(online);
 
     this.state.client.publish(
       topic,
@@ -159,7 +177,7 @@ class ScadaMqttService {
         if (error) {
           console.error(`❌ [SCADA MQTT] Failed to publish STATE: ${error.message}`);
         } else {
-          console.log(`✅ [SCADA MQTT] Published STATE: ${state} → ${topic}`);
+          console.log(`✅ [SCADA MQTT] Published STATE: ${online ? 'ONLINE' : 'OFFLINE'} → ${topic}`);
         }
       }
     );

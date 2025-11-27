@@ -53,9 +53,9 @@ export const useMQTTStore = create<MQTTState>()(
           state.brokerUrl = brokerUrl;
         });
 
-        // Subscribe to all Sparkplug topics
-        client.subscribe('spBv1.0/#', { qos: 0 });
-        client.subscribe('$sparkplug/#', { qos: 0 });
+        // Subscribe to all Sparkplug B topics with QoS 1 for reliable delivery
+        client.subscribe('spBv1.0/#', { qos: 1 });
+        client.subscribe('$sparkplug/#', { qos: 1 });
       });
 
       client.on('message', (topic, payload, packet) => {

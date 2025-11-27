@@ -20,13 +20,14 @@ export function StateIndicator() {
   const [secondaryHosts, setSecondaryHosts] = useState<Map<string, HostState>>(new Map());
 
   useEffect(() => {
-    // Listen for STATE messages on topic: STATE/scada_host
-    const stateMessages = messages.filter((msg) => msg.topic.startsWith('STATE/'));
+    // Listen for STATE messages on Sparkplug B topic: spBv1.0/STATE/{hostId}
+    const stateMessages = messages.filter((msg) => msg.topic.startsWith('spBv1.0/STATE/'));
 
     stateMessages.forEach((msg) => {
       try {
         const parts = msg.topic.split('/');
-        const hostId = parts[1] || 'unknown';
+        // Topic format: spBv1.0/STATE/{hostId}
+        const hostId = parts[2] || 'unknown';
 
         // Decode STATE payload (JSON format)
         const decoder = new TextDecoder();
