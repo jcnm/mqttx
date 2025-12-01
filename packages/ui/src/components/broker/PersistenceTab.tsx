@@ -5,6 +5,16 @@
 
 import { useState } from 'react';
 import { format } from 'date-fns';
+import {
+  CheckCircle,
+  XCircle,
+  FileText,
+  Server,
+  Smartphone,
+  HardDrive,
+  AlertTriangle,
+  Info,
+} from 'lucide-react';
 
 export function PersistenceTab() {
   // Mock Redis connection status (will be replaced with real data from store)
@@ -46,9 +56,11 @@ export function PersistenceTab() {
           : 'bg-red-900/20 border-red-800/30'
       }`}>
         <div className="flex items-start gap-4">
-          <div className={`text-4xl ${redisConnected ? 'animate-pulse' : ''}`}>
-            {redisConnected ? '✅' : '❌'}
-          </div>
+          {redisConnected ? (
+            <CheckCircle className={`w-10 h-10 text-green-400 ${redisConnected ? 'animate-pulse' : ''}`} />
+          ) : (
+            <XCircle className="w-10 h-10 text-red-400" />
+          )}
           <div className="flex-1">
             <h3 className={`text-lg font-semibold mb-1 ${
               redisConnected ? 'text-green-400' : 'text-red-400'
@@ -68,7 +80,7 @@ export function PersistenceTab() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">📜</span>
+            <FileText className="w-6 h-6 text-emerald-400" />
             <span className="text-xs text-slate-400">Birth Certificates</span>
           </div>
           <p className="text-2xl font-bold text-emerald-500">{stats.birthCertificates}</p>
@@ -77,7 +89,7 @@ export function PersistenceTab() {
 
         <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">🔷</span>
+            <Server className="w-6 h-6 text-blue-400" />
             <span className="text-xs text-slate-400">Node States</span>
           </div>
           <p className="text-2xl font-bold text-blue-500">{stats.nodeStates}</p>
@@ -86,7 +98,7 @@ export function PersistenceTab() {
 
         <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">📱</span>
+            <Smartphone className="w-6 h-6 text-yellow-400" />
             <span className="text-xs text-slate-400">Device States</span>
           </div>
           <p className="text-2xl font-bold text-yellow-500">{stats.deviceStates}</p>
@@ -95,7 +107,7 @@ export function PersistenceTab() {
 
         <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">💾</span>
+            <HardDrive className="w-6 h-6 text-purple-400" />
             <span className="text-xs text-slate-400">Memory Usage</span>
           </div>
           <p className="text-2xl font-bold text-purple-500">{formatBytes(stats.memoryUsage)}</p>
@@ -169,7 +181,7 @@ export function PersistenceTab() {
         <h4 className="text-sm font-semibold text-slate-300 mb-4">Stored Data Structure</h4>
         <div className="space-y-3 text-sm">
           <div className="flex items-start gap-3">
-            <span className="text-emerald-500">📜</span>
+            <FileText className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <div className="font-medium text-slate-200 mb-1">Birth Certificates</div>
               <div className="text-xs text-slate-400">
@@ -183,7 +195,7 @@ export function PersistenceTab() {
           </div>
 
           <div className="flex items-start gap-3">
-            <span className="text-blue-500">🔷</span>
+            <Server className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <div className="font-medium text-slate-200 mb-1">Node States</div>
               <div className="text-xs text-slate-400">
@@ -197,7 +209,7 @@ export function PersistenceTab() {
           </div>
 
           <div className="flex items-start gap-3">
-            <span className="text-yellow-500">📱</span>
+            <Smartphone className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <div className="font-medium text-slate-200 mb-1">Device States</div>
               <div className="text-xs text-slate-400">
@@ -222,7 +234,9 @@ export function PersistenceTab() {
             className="w-full px-4 py-3 bg-red-900/20 text-red-400 border border-red-800/30 rounded-lg text-sm font-medium hover:bg-red-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
           >
             <span>Clear All Cached Data</span>
-            <span className="text-xs text-slate-500">⚠️ Irreversible</span>
+            <span className="flex items-center gap-1 text-xs text-slate-500">
+              <AlertTriangle className="w-3 h-3" /> Irreversible
+            </span>
           </button>
 
           <div className="flex gap-3">
@@ -245,7 +259,7 @@ export function PersistenceTab() {
       {/* Info Panel */}
       <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <div className="text-2xl">ℹ️</div>
+          <Info className="w-6 h-6 text-blue-400 flex-shrink-0" />
           <div className="flex-1">
             <h4 className="font-semibold text-blue-400 mb-2">About Persistence</h4>
             <p className="text-sm text-slate-400 mb-3">

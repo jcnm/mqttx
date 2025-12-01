@@ -4,6 +4,16 @@
  */
 
 import { useState, useEffect } from 'react';
+import {
+  FileText,
+  Users,
+  Mail,
+  Lock,
+  Tag,
+  Database,
+  Zap,
+  CheckCircle,
+} from 'lucide-react';
 import { useBrokerStore } from '../../stores/brokerStore';
 import { useMQTTStore } from '../../stores/mqttStore';
 import { LogsTab } from './LogsTab';
@@ -12,6 +22,7 @@ import { TopicsTab } from './TopicsTab';
 import { ACLsTab } from './ACLsTab';
 import { NamespacesTab } from './NamespacesTab';
 import { PersistenceTab } from './PersistenceTab';
+import type { LucideIcon } from 'lucide-react';
 
 type TabType = 'logs' | 'sessions' | 'topics' | 'acls' | 'namespaces' | 'persistence';
 
@@ -35,13 +46,13 @@ export function BrokerViewer() {
     return () => clearInterval(interval);
   }, [logs]);
 
-  const tabs: { id: TabType; label: string; icon: string; description: string }[] = [
-    { id: 'logs', label: 'Logs', icon: '📝', description: 'Real-time message logs' },
-    { id: 'sessions', label: 'Sessions', icon: '👥', description: 'Active MQTT sessions' },
-    { id: 'topics', label: 'Topics', icon: '📮', description: 'Topic subscriptions' },
-    { id: 'acls', label: 'ACLs', icon: '🔒', description: 'Access control rules' },
-    { id: 'namespaces', label: 'Namespaces', icon: '🏷️', description: 'Sparkplug namespaces' },
-    { id: 'persistence', label: 'Persistence', icon: '💾', description: 'Redis cache status' },
+  const tabs: { id: TabType; label: string; icon: LucideIcon; description: string }[] = [
+    { id: 'logs', label: 'Logs', icon: FileText, description: 'Real-time message logs' },
+    { id: 'sessions', label: 'Sessions', icon: Users, description: 'Active MQTT sessions' },
+    { id: 'topics', label: 'Topics', icon: Mail, description: 'Topic subscriptions' },
+    { id: 'acls', label: 'ACLs', icon: Lock, description: 'Access control rules' },
+    { id: 'namespaces', label: 'Namespaces', icon: Tag, description: 'Sparkplug namespaces' },
+    { id: 'persistence', label: 'Persistence', icon: Database, description: 'Redis cache status' },
   ];
 
   return (
@@ -77,7 +88,7 @@ export function BrokerViewer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xl">👥</span>
+              <Users className="w-5 h-5 text-blue-400" />
               <p className="text-xs text-slate-400">Active Sessions</p>
             </div>
             <p className="text-2xl font-bold text-white">{sessions.size}</p>
@@ -85,7 +96,7 @@ export function BrokerViewer() {
 
           <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xl">⚡</span>
+              <Zap className="w-5 h-5 text-yellow-400" />
               <p className="text-xs text-slate-400">Msg/Sec</p>
             </div>
             <p className="text-2xl font-bold text-emerald-500">{messagesPerSec}</p>
@@ -93,7 +104,7 @@ export function BrokerViewer() {
 
           <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xl">📮</span>
+              <Mail className="w-5 h-5 text-purple-400" />
               <p className="text-xs text-slate-400">Total Topics</p>
             </div>
             <p className="text-2xl font-bold text-yellow-500">
@@ -103,7 +114,7 @@ export function BrokerViewer() {
 
           <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xl">💾</span>
+              <Database className="w-5 h-5 text-cyan-400" />
               <p className="text-xs text-slate-400">Redis Status</p>
             </div>
             <div className="flex items-center gap-2">
@@ -126,7 +137,7 @@ export function BrokerViewer() {
                     : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800'
                 }`}
               >
-                <span className="text-lg">{tab.icon}</span>
+                <tab.icon className="w-5 h-5" />
                 <div className="text-left">
                   <div>{tab.label}</div>
                   {activeTab === tab.id && (
@@ -151,7 +162,7 @@ export function BrokerViewer() {
         {/* Footer Info */}
         <div className="mt-8 bg-emerald-900/10 border border-emerald-800/30 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <div className="text-2xl">✅</div>
+            <CheckCircle className="w-6 h-6 text-emerald-400 flex-shrink-0" />
             <div>
               <h4 className="font-semibold text-emerald-400 mb-1">Phase 2 Complete</h4>
               <p className="text-sm text-slate-400">

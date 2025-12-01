@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { format } from 'date-fns';
+import { Download, FileJson, Table } from 'lucide-react';
 import type { BrokerLog } from '../../types/broker.types';
 
 interface ExportButtonProps {
@@ -89,7 +90,7 @@ export function ExportButton({ data, filename = 'broker-logs' }: ExportButtonPro
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
       >
-        <span>📥</span>
+        <Download className="w-4 h-4" />
         Export
         <span className="text-xs">({data.length})</span>
       </button>
@@ -105,7 +106,7 @@ export function ExportButton({ data, filename = 'broker-logs' }: ExportButtonPro
               onClick={exportAsJSON}
               className="w-full px-4 py-3 text-left text-sm text-slate-200 hover:bg-slate-800 transition-colors flex items-center gap-3"
             >
-              <span className="text-lg">📄</span>
+              <FileJson className="w-5 h-5 text-blue-400" />
               <div>
                 <div className="font-medium">Export as JSON</div>
                 <div className="text-xs text-slate-500">Structured data format</div>
@@ -116,7 +117,7 @@ export function ExportButton({ data, filename = 'broker-logs' }: ExportButtonPro
               onClick={exportAsCSV}
               className="w-full px-4 py-3 text-left text-sm text-slate-200 hover:bg-slate-800 transition-colors flex items-center gap-3 border-t border-slate-800"
             >
-              <span className="text-lg">📊</span>
+              <Table className="w-5 h-5 text-emerald-400" />
               <div>
                 <div className="font-medium">Export as CSV</div>
                 <div className="text-xs text-slate-500">Spreadsheet compatible</div>

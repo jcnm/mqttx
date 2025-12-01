@@ -4,6 +4,7 @@
  */
 
 import { useState } from 'react';
+import { Radio } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { AuthService } from '../../services/authService';
 import { toastService } from '../../services/toastService';
@@ -44,7 +45,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         <div className="text-center">
           <div className="flex items-center justify-center mb-4">
             <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center">
-              <span className="text-3xl">📡</span>
+              <Radio className="w-8 h-8 text-white" />
             </div>
           </div>
           <h2 className="text-3xl font-bold text-white mb-2">MQTT Sparkplug Platform</h2>

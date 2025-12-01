@@ -4,6 +4,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { List, LineChart, Network, FolderTree, FileText } from 'lucide-react';
 import { useBrokerStore } from '../../stores/brokerStore';
 import { FilterPanel } from './FilterPanel';
 import { ExportButton } from './ExportButton';
@@ -11,6 +12,7 @@ import { LinearView } from './visualizations/LinearView';
 import { TimeseriesView } from './visualizations/TimeseriesView';
 import { GraphView } from './visualizations/GraphView';
 import { TreeView } from './visualizations/TreeView';
+import type { LucideIcon } from 'lucide-react';
 
 // Helper function to match topic patterns (+ and # wildcards)
 function matchesTopic(topic: string, pattern: string): boolean {
@@ -94,6 +96,13 @@ export function LogsTab() {
     });
   };
 
+  const viewModes: { id: string; label: string; icon: LucideIcon }[] = [
+    { id: 'linear', label: 'Linear', icon: List },
+    { id: 'timeseries', label: 'Timeseries', icon: LineChart },
+    { id: 'graph', label: 'Graph', icon: Network },
+    { id: 'tree', label: 'Tree', icon: FolderTree },
+  ];
+
   return (
     <div className="space-y-4">
       {/* Controls Bar */}
@@ -137,22 +146,17 @@ export function LogsTab() {
       {/* Visualization Mode Selector */}
       <div className="flex items-center gap-2">
         <span className="text-sm text-slate-400">View:</span>
-        {[
-          { id: 'linear', label: 'Linear', icon: '📋' },
-          { id: 'timeseries', label: 'Timeseries', icon: '📈' },
-          { id: 'graph', label: 'Graph', icon: '🕸️' },
-          { id: 'tree', label: 'Tree', icon: '🌳' },
-        ].map((mode) => (
+        {viewModes.map((mode) => (
           <button
             key={mode.id}
-            onClick={() => setVisualizationMode(mode.id as any)}
+            onClick={() => setVisualizationMode(mode.id as 'linear' | 'timeseries' | 'graph' | 'tree')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
               visualizationMode === mode.id
                 ? 'bg-emerald-600 text-white'
                 : 'bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700'
             }`}
           >
-            <span>{mode.icon}</span>
+            <mode.icon className="w-4 h-4" />
             {mode.label}
           </button>
         ))}
@@ -189,7 +193,7 @@ export function LogsTab() {
       <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
         {filteredLogs.length === 0 ? (
           <div className="text-center py-12">
-            <div className="text-5xl mb-4">📝</div>
+            <FileText className="w-16 h-16 mx-auto mb-4 text-slate-600" />
             <p className="text-slate-400">No messages logged yet</p>
             <p className="text-sm text-slate-500 mt-2">
               {logs.length > 0

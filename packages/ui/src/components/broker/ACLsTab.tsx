@@ -4,6 +4,7 @@
  */
 
 import { useState } from 'react';
+import { Lock, BookOpen, Pencil, Info } from 'lucide-react';
 import { useBrokerStore } from '../../stores/brokerStore';
 import type { ACLRule } from '../../types/broker.types';
 
@@ -167,7 +168,7 @@ export function ACLsTab() {
       {/* Rules Table */}
       {acls.length === 0 ? (
         <div className="text-center py-12 bg-slate-900 rounded-lg border border-slate-800">
-          <div className="text-5xl mb-4">🔒</div>
+          <Lock className="w-16 h-16 mx-auto mb-4 text-slate-600" />
           <p className="text-slate-400">No ACL rules configured</p>
           <p className="text-sm text-slate-500 mt-2">
             Click "Add Rule" to create your first access control rule
@@ -217,9 +218,15 @@ export function ACLsTab() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 text-xs text-slate-300">
-                      {acl.permission === 'read' && '📖 Subscribe'}
-                      {acl.permission === 'write' && '✍️ Publish'}
-                      {acl.permission === 'readwrite' && '📖✍️ Both'}
+                      {acl.permission === 'read' && (
+                        <><BookOpen className="w-3 h-3" /> Subscribe</>
+                      )}
+                      {acl.permission === 'write' && (
+                        <><Pencil className="w-3 h-3" /> Publish</>
+                      )}
+                      {acl.permission === 'readwrite' && (
+                        <><BookOpen className="w-3 h-3" /><Pencil className="w-3 h-3" /> Both</>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -240,7 +247,7 @@ export function ACLsTab() {
       {/* Info Panel */}
       <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <div className="text-2xl">ℹ️</div>
+          <Info className="w-6 h-6 text-blue-400 flex-shrink-0" />
           <div className="flex-1">
             <h4 className="font-semibold text-blue-400 mb-2">ACL Pattern Matching</h4>
             <ul className="text-sm text-slate-400 space-y-1">

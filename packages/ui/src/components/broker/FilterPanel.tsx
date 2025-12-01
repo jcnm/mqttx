@@ -4,6 +4,7 @@
  */
 
 import { useState } from 'react';
+import { Search, ChevronDown, ChevronRight } from 'lucide-react';
 import type { LogFilter, MessageType } from '../../types/broker.types';
 
 interface FilterPanelProps {
@@ -38,7 +39,7 @@ export function FilterPanel({ filter, onFilterChange, onClearFilters }: FilterPa
         className="w-full flex items-center justify-between p-4 hover:bg-slate-800/50 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <span className="text-lg">🔍</span>
+          <Search className="w-5 h-5 text-slate-400" />
           <span className="text-sm font-semibold text-slate-200">Filters</span>
           {hasActiveFilters && (
             <span className="text-xs bg-emerald-900/30 text-emerald-400 px-2 py-0.5 rounded-full">
@@ -46,7 +47,11 @@ export function FilterPanel({ filter, onFilterChange, onClearFilters }: FilterPa
             </span>
           )}
         </div>
-        <span className="text-slate-400 text-sm">{isExpanded ? '▼' : '▶'}</span>
+        {isExpanded ? (
+          <ChevronDown className="w-4 h-4 text-slate-400" />
+        ) : (
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        )}
       </button>
 
       {/* Filter Controls */}
