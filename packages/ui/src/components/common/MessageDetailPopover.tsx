@@ -375,14 +375,140 @@ function ASCIITab({ log }: { log: BrokerLog }) {
   );
 }
 
+// Message Type Descriptions for Sparkplug B
+const MESSAGE_TYPE_INFO: Record<string, { description: string; purpose: string; qos: string; retain: string; color: string }> = {
+  NBIRTH: {
+    description: 'Node Birth Certificate',
+    purpose: 'Establishes Edge Node online status with all metrics definitions. Must be first message from node after connect.',
+    qos: 'QoS 1 (Required)',
+    retain: 'No',
+    color: 'green',
+  },
+  NDEATH: {
+    description: 'Node Death Certificate',
+    purpose: 'Indicates Edge Node has gone offline. Published by broker via Will Message or node on graceful disconnect.',
+    qos: 'QoS 1 (Required)',
+    retain: 'No',
+    color: 'red',
+  },
+  DBIRTH: {
+    description: 'Device Birth Certificate',
+    purpose: 'Establishes Device online status with all device metrics definitions. Published by parent Edge Node.',
+    qos: 'QoS 1 (Required)',
+    retain: 'No',
+    color: 'green',
+  },
+  DDEATH: {
+    description: 'Device Death Certificate',
+    purpose: 'Indicates Device has gone offline. Published by parent Edge Node.',
+    qos: 'QoS 1 (Required)',
+    retain: 'No',
+    color: 'red',
+  },
+  NDATA: {
+    description: 'Node Data',
+    purpose: 'Contains changed metric values from Edge Node. Uses Report by Exception (RBE) - only changed values sent.',
+    qos: 'QoS 0/1 (Configurable)',
+    retain: 'No',
+    color: 'cyan',
+  },
+  DDATA: {
+    description: 'Device Data',
+    purpose: 'Contains changed metric values from Device. Published by parent Edge Node using RBE.',
+    qos: 'QoS 0/1 (Configurable)',
+    retain: 'No',
+    color: 'cyan',
+  },
+  NCMD: {
+    description: 'Node Command',
+    purpose: 'Command sent to Edge Node from SCADA Host. Can include Rebirth request or metric write commands.',
+    qos: 'QoS 0/1 (Configurable)',
+    retain: 'No',
+    color: 'purple',
+  },
+  DCMD: {
+    description: 'Device Command',
+    purpose: 'Command sent to Device via parent Edge Node. Used for device control and configuration.',
+    qos: 'QoS 0/1 (Configurable)',
+    retain: 'No',
+    color: 'purple',
+  },
+  STATE: {
+    description: 'SCADA Host State',
+    purpose: 'Indicates Primary Host Application online/offline status. Triggers rebirth from all Edge Nodes when online.',
+    qos: 'QoS 1 (Required)',
+    retain: 'Yes (Required)',
+    color: 'yellow',
+  },
+};
+
 // Structure Tab - Show Sparkplug B specification structure
 function StructureTab({ log }: { log: BrokerLog }) {
   // Parse topic structure
   const topicParts = log.topic?.split('/') || [];
   const isSparkplug = log.topic?.startsWith('spBv1.0/');
+  const messageType = log.messageType || topicParts[2] || 'UNKNOWN';
+  const typeInfo = MESSAGE_TYPE_INFO[messageType];
+
+  // Extract Sparkplug metadata
+  const groupId = topicParts[1];
+  const edgeNodeId = topicParts[3];
+  const deviceId = topicParts[4];
 
   return (
     <div className="space-y-6">
+      {/* Message Type Info Card */}
+      {isSparkplug && typeInfo && (
+        <div className={`bg-slate-900 rounded-lg border p-6 ${
+          typeInfo.color === 'green' ? 'border-green-700' :
+          typeInfo.color === 'red' ? 'border-red-700' :
+          typeInfo.color === 'cyan' ? 'border-cyan-700' :
+          typeInfo.color === 'purple' ? 'border-purple-700' :
+          'border-yellow-700'
+        }`}>
+          <div className="flex items-start gap-4">
+            <div className={`p-3 rounded-lg ${
+              typeInfo.color === 'green' ? 'bg-green-900/50' :
+              typeInfo.color === 'red' ? 'bg-red-900/50' :
+              typeInfo.color === 'cyan' ? 'bg-cyan-900/50' :
+              typeInfo.color === 'purple' ? 'bg-purple-900/50' :
+              'bg-yellow-900/50'
+            }`}>
+              <Zap className={`w-8 h-8 ${
+                typeInfo.color === 'green' ? 'text-green-400' :
+                typeInfo.color === 'red' ? 'text-red-400' :
+                typeInfo.color === 'cyan' ? 'text-cyan-400' :
+                typeInfo.color === 'purple' ? 'text-purple-400' :
+                'text-yellow-400'
+              }`} />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <h3 className={`text-2xl font-bold ${
+                  typeInfo.color === 'green' ? 'text-green-400' :
+                  typeInfo.color === 'red' ? 'text-red-400' :
+                  typeInfo.color === 'cyan' ? 'text-cyan-400' :
+                  typeInfo.color === 'purple' ? 'text-purple-400' :
+                  'text-yellow-400'
+                }`}>{messageType}</h3>
+                <span className="text-slate-400 text-sm">({typeInfo.description})</span>
+              </div>
+              <p className="text-slate-300 text-sm mb-4">{typeInfo.purpose}</p>
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">QoS:</span>
+                  <span className="text-white font-mono">{typeInfo.qos}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">Retain:</span>
+                  <span className="text-white font-mono">{typeInfo.retain}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Topic Structure */}
       <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
         <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -404,10 +530,10 @@ function StructureTab({ log }: { log: BrokerLog }) {
                 </span>
                 <span className="text-slate-500">/</span>
                 <span className={`px-2 py-1 rounded ${
-                  log.messageType === 'NBIRTH' || log.messageType === 'DBIRTH' ? 'bg-green-900/50 text-green-400' :
-                  log.messageType === 'NDEATH' || log.messageType === 'DDEATH' ? 'bg-red-900/50 text-red-400' :
-                  log.messageType === 'NDATA' || log.messageType === 'DDATA' ? 'bg-cyan-900/50 text-cyan-400' :
-                  log.messageType === 'NCMD' || log.messageType === 'DCMD' ? 'bg-purple-900/50 text-purple-400' :
+                  messageType === 'NBIRTH' || messageType === 'DBIRTH' ? 'bg-green-900/50 text-green-400' :
+                  messageType === 'NDEATH' || messageType === 'DDEATH' ? 'bg-red-900/50 text-red-400' :
+                  messageType === 'NDATA' || messageType === 'DDATA' ? 'bg-cyan-900/50 text-cyan-400' :
+                  messageType === 'NCMD' || messageType === 'DCMD' ? 'bg-purple-900/50 text-purple-400' :
                   'bg-yellow-900/50 text-yellow-400'
                 }`}>
                   {topicParts[2] || 'messageType'}
@@ -423,6 +549,29 @@ function StructureTab({ log }: { log: BrokerLog }) {
                       {topicParts[4]}
                     </span>
                   </>
+                )}
+              </div>
+            </div>
+
+            {/* Sparkplug Entity Hierarchy */}
+            <div className="bg-slate-950 rounded-lg p-4 border border-slate-800">
+              <div className="text-sm font-semibold text-slate-300 mb-3">Entity Hierarchy</div>
+              <div className="space-y-2 font-mono text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">Group:</span>
+                  <span className="text-blue-400">{groupId || 'N/A'}</span>
+                </div>
+                <div className="flex items-center gap-2 ml-4">
+                  <span className="text-slate-600">└─</span>
+                  <span className="text-slate-500">Edge Node:</span>
+                  <span className="text-emerald-400">{edgeNodeId || 'N/A'}</span>
+                </div>
+                {deviceId && (
+                  <div className="flex items-center gap-2 ml-8">
+                    <span className="text-slate-600">└─</span>
+                    <span className="text-slate-500">Device:</span>
+                    <span className="text-orange-400">{deviceId}</span>
+                  </div>
                 )}
               </div>
             </div>
