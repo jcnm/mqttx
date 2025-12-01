@@ -53,7 +53,7 @@ export interface SessionInfo {
 export interface DetailedBrokerLog {
   id: string;
   timestamp: number;
-  type: 'publish' | 'subscribe' | 'unsubscribe' | 'connect' | 'disconnect';
+  type: 'publish' | 'subscribe' | 'unsubscribe' | 'connect' | 'disconnect' | 'ack';
   clientId: string;
   topic?: string;
   qos?: 0 | 1 | 2;
@@ -79,6 +79,12 @@ export interface DetailedBrokerLog {
     isNewSession: boolean;
     sessionExpiry?: number;
     lastWillTopic?: string;
+  };
+  ackInfo?: {
+    ackType: 'NBIRTH' | 'DBIRTH' | 'NDATA' | 'DDATA';
+    processedAt: number;
+    success: boolean;
+    message?: string;
   };
 }
 
@@ -291,7 +297,12 @@ export class BrokerMonitor extends EventEmitter {
                 ndeathPublished: false,
                 birthTimestamp: Date.now(),
               };
+              // Emit ACK for NBIRTH
+              this.emitBirthAck(session, 'NBIRTH', parsed.groupId!, parsed.edgeNodeId!, undefined, decoded);
             }
+          } else if (parsed.messageType === MessageType.DBIRTH) {
+            // Emit ACK for DBIRTH
+            this.emitBirthAck(session, 'DBIRTH', parsed.groupId!, parsed.edgeNodeId!, parsed.deviceId, decoded);
           } else if (parsed.messageType === MessageType.NDEATH) {
             if (session.sparkplugState) {
               session.sparkplugState.ndeathPublished = true;
@@ -300,6 +311,11 @@ export class BrokerMonitor extends EventEmitter {
             if (decoded.seq !== undefined) {
               session.sparkplugState.expectedSeq = (BigInt(decoded.seq) + 1n) % 256n;
             }
+            // Emit ACK for NDATA
+            this.emitDataAck(session, 'NDATA', parsed.groupId!, parsed.edgeNodeId!, undefined, decoded);
+          } else if (parsed.messageType === MessageType.DDATA) {
+            // Emit ACK for DDATA
+            this.emitDataAck(session, 'DDATA', parsed.groupId!, parsed.edgeNodeId!, parsed.deviceId, decoded);
           }
         }
       } catch (error) {
@@ -476,6 +492,124 @@ export class BrokerMonitor extends EventEmitter {
     } catch (error) {
       console.error('Error encoding NDEATH payload:', error);
     }
+  }
+
+  /**
+   * Emit ACK for BIRTH messages (NBIRTH/DBIRTH)
+   */
+  private emitBirthAck(
+    session: SessionInfo,
+    type: 'NBIRTH' | 'DBIRTH',
+    groupId: string,
+    edgeNodeId: string,
+    deviceId: string | undefined,
+    decoded: any
+  ): void {
+    const entityPath = deviceId
+      ? `${groupId}/${edgeNodeId}/${deviceId}`
+      : `${groupId}/${edgeNodeId}`;
+
+    const metricCount = decoded?.metrics?.length || 0;
+    const seq = decoded?.seq !== undefined ? BigInt(decoded.seq) : undefined;
+
+    console.log(`[ACK] ${type} received from ${entityPath} (seq: ${seq}, metrics: ${metricCount})`);
+
+    const ackLog: DetailedBrokerLog = {
+      id: this.generateLogId(),
+      timestamp: Date.now(),
+      type: 'ack',
+      clientId: session.clientId,
+      messageType: type,
+      origin: {
+        ip: session.ip,
+        port: session.port,
+      },
+      sparkplugMetadata: {
+        groupId,
+        edgeNodeId,
+        deviceId,
+        seq,
+        metricCount,
+      },
+      ackInfo: {
+        ackType: type,
+        processedAt: Date.now(),
+        success: true,
+        message: `${type} acknowledged: ${metricCount} metrics registered`,
+      },
+    };
+
+    this.addLog(ackLog);
+    this.emit('birthAck', {
+      type,
+      groupId,
+      edgeNodeId,
+      deviceId,
+      metricCount,
+      seq,
+      timestamp: Date.now(),
+      clientId: session.clientId,
+    });
+    this.emit('log', ackLog);
+  }
+
+  /**
+   * Emit ACK for DATA messages (NDATA/DDATA)
+   */
+  private emitDataAck(
+    session: SessionInfo,
+    type: 'NDATA' | 'DDATA',
+    groupId: string,
+    edgeNodeId: string,
+    deviceId: string | undefined,
+    decoded: any
+  ): void {
+    const entityPath = deviceId
+      ? `${groupId}/${edgeNodeId}/${deviceId}`
+      : `${groupId}/${edgeNodeId}`;
+
+    const metricCount = decoded?.metrics?.length || 0;
+    const seq = decoded?.seq !== undefined ? BigInt(decoded.seq) : undefined;
+
+    console.log(`[ACK] ${type} received from ${entityPath} (seq: ${seq}, metrics: ${metricCount})`);
+
+    const ackLog: DetailedBrokerLog = {
+      id: this.generateLogId(),
+      timestamp: Date.now(),
+      type: 'ack',
+      clientId: session.clientId,
+      messageType: type,
+      origin: {
+        ip: session.ip,
+        port: session.port,
+      },
+      sparkplugMetadata: {
+        groupId,
+        edgeNodeId,
+        deviceId,
+        seq,
+        metricCount,
+      },
+      ackInfo: {
+        ackType: type,
+        processedAt: Date.now(),
+        success: true,
+        message: `${type} acknowledged: ${metricCount} metrics updated`,
+      },
+    };
+
+    this.addLog(ackLog);
+    this.emit('dataAck', {
+      type,
+      groupId,
+      edgeNodeId,
+      deviceId,
+      metricCount,
+      seq,
+      timestamp: Date.now(),
+      clientId: session.clientId,
+    });
+    this.emit('log', ackLog);
   }
 
   /**
