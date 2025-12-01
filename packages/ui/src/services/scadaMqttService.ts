@@ -16,6 +16,9 @@ import type { BrokerLog } from '../types/broker.types';
 // Sparkplug B namespace prefix
 const SPARKPLUG_NAMESPACE = 'spBv1.0';
 
+// MQTT 5 Will Delay Interval (seconds) - time broker waits before publishing Will
+const DEFAULT_WILL_DELAY_SECONDS = 10;
+
 /**
  * Create a Sparkplug B compliant STATE payload
  */
@@ -26,6 +29,14 @@ function createStatePayload(online: boolean): string {
   });
 }
 
+/**
+ * MQTT 5 Will Message properties for Sparkplug B
+ */
+interface WillProperties {
+  willDelayInterval: number; // Seconds before Will is published after disconnect
+  userProperties: Record<string, string>; // Custom key-value pairs
+}
+
 interface ScadaMqttServiceState {
   client: MqttClient | null;
   isConnected: boolean;
@@ -34,6 +45,12 @@ interface ScadaMqttServiceState {
   scadaHostId: string;
   messages: Array<{ topic: string; payload: Buffer; timestamp: number }>;
   onMessageCallback: ((log: BrokerLog) => void) | null;
+  // Will buffer for future sessions (refreshed after birth/rebirth)
+  willBuffer: {
+    topic: string;
+    payload: string;
+    properties: WillProperties;
+  } | null;
 }
 
 class ScadaMqttService {
@@ -45,6 +62,7 @@ class ScadaMqttService {
     scadaHostId: 'MQTTX-SCADA', // Sparkplug B Host Application ID
     messages: [],
     onMessageCallback: null,
+    willBuffer: null,
   };
 
   /**
@@ -56,28 +74,45 @@ class ScadaMqttService {
       this.state.client.end();
     }
 
-    console.log('🔌 [SCADA MQTT] Connecting to broker:', brokerUrl);
+    console.log('[SCADA MQTT] Connecting to broker:', brokerUrl);
 
     // Sparkplug B STATE topic: spBv1.0/STATE/{hostId}
     const stateTopic = `${SPARKPLUG_NAMESPACE}/STATE/${this.state.scadaHostId}`;
+
+    // Initialize Will buffer with MQTT 5 properties
+    this.refreshWillBuffer();
+
+    // MQTT 5 Will properties for Sparkplug B compliance
+    const willProperties: WillProperties = this.state.willBuffer?.properties || {
+      willDelayInterval: DEFAULT_WILL_DELAY_SECONDS,
+      userProperties: {
+        spbType: 'STATE',
+        spbGroup: this.state.scadaHostId,
+      },
+    };
 
     const client = mqtt.connect(brokerUrl, {
       clientId: `scada-host-${Math.random().toString(16).slice(2, 8)}`,
       clean: true,
       reconnectPeriod: 5000,
       keepalive: 60,
-      protocolVersion: 4, // MQTT v3.1.1
+      protocolVersion: 5, // MQTT v5.0 for Will properties support
       // Sparkplug B: Will message for STATE = OFFLINE (JSON payload with timestamp)
       will: {
         topic: stateTopic,
         payload: createStatePayload(false),
         qos: 1,
         retain: true,
+        // MQTT 5 Will properties
+        properties: {
+          willDelayInterval: willProperties.willDelayInterval,
+          userProperties: willProperties.userProperties,
+        },
       },
     });
 
     client.on('connect', () => {
-      console.log('✅ [SCADA MQTT] Connected to broker');
+      console.log('[SCADA MQTT] Connected to broker');
       this.state.isConnected = true;
       this.state.connectionError = null;
       this.state.brokerUrl = brokerUrl;
@@ -86,21 +121,25 @@ class ScadaMqttService {
       // This triggers the broker to request rebirth from all online EoN
       this.publishState(true);
 
+      // Refresh Will buffer after successful birth/connection
+      // This prepares the buffer for future reconnections
+      this.refreshWillBuffer();
+
       // Subscribe to all Sparkplug B topics with QoS 1 for reliable delivery
       client.subscribe(`${SPARKPLUG_NAMESPACE}/#`, { qos: 1 }, (err) => {
         if (err) {
-          console.error('❌ [SCADA MQTT] Failed to subscribe:', err);
+          console.error('[SCADA MQTT] Failed to subscribe:', err);
         } else {
-          console.log(`📥 [SCADA MQTT] Subscribed to ${SPARKPLUG_NAMESPACE}/# (QoS 1)`);
+          console.log(`[SCADA MQTT] Subscribed to ${SPARKPLUG_NAMESPACE}/# (QoS 1)`);
         }
       });
 
       // Subscribe to STATE messages (within Sparkplug namespace)
       client.subscribe(`${SPARKPLUG_NAMESPACE}/STATE/#`, { qos: 1 }, (err) => {
         if (err) {
-          console.error('❌ [SCADA MQTT] Failed to subscribe to STATE:', err);
+          console.error('[SCADA MQTT] Failed to subscribe to STATE:', err);
         } else {
-          console.log(`📥 [SCADA MQTT] Subscribed to ${SPARKPLUG_NAMESPACE}/STATE/# (QoS 1)`);
+          console.log(`[SCADA MQTT] Subscribed to ${SPARKPLUG_NAMESPACE}/STATE/# (QoS 1)`);
         }
       });
     });
@@ -115,7 +154,7 @@ class ScadaMqttService {
         this.state.messages.shift();
       }
 
-      console.log(`📥 [SCADA MQTT] Received: ${topic} (${payload.length} bytes)`);
+      console.log(`[SCADA MQTT] Received: ${topic} (${payload.length} bytes)`);
 
       // Call onMessage callback if set
       if (this.state.onMessageCallback) {
@@ -138,17 +177,17 @@ class ScadaMqttService {
     });
 
     client.on('close', () => {
-      console.log('❌ [SCADA MQTT] Disconnected from broker');
+      console.log('[SCADA MQTT] Disconnected from broker');
       this.state.isConnected = false;
     });
 
     client.on('error', (error) => {
-      console.error('❌ [SCADA MQTT] Error:', error);
+      console.error('[SCADA MQTT] Error:', error);
       this.state.connectionError = error.message;
     });
 
     client.on('reconnect', () => {
-      console.log('🔄 [SCADA MQTT] Reconnecting...');
+      console.log('[SCADA MQTT] Reconnecting...');
     });
 
     this.state.client = client;
@@ -162,7 +201,7 @@ class ScadaMqttService {
    */
   private publishState(online: boolean): void {
     if (!this.state.client || !this.state.client.connected) {
-      console.warn('⚠️  [SCADA MQTT] Cannot publish STATE: not connected');
+      console.warn('[SCADA MQTT] Cannot publish STATE: not connected');
       return;
     }
 
@@ -175,12 +214,42 @@ class ScadaMqttService {
       { qos: 1, retain: true },
       (error) => {
         if (error) {
-          console.error(`❌ [SCADA MQTT] Failed to publish STATE: ${error.message}`);
+          console.error(`[SCADA MQTT] Failed to publish STATE: ${error.message}`);
         } else {
-          console.log(`✅ [SCADA MQTT] Published STATE: ${online ? 'ONLINE' : 'OFFLINE'} → ${topic}`);
+          console.log(`[SCADA MQTT] Published STATE: ${online ? 'ONLINE' : 'OFFLINE'} -> ${topic}`);
         }
       }
     );
+  }
+
+  /**
+   * Refresh Will buffer for future sessions
+   * Called after birth/rebirth to update the Will message payload
+   * MQTT 5 allows Will properties that provide additional context
+   */
+  private refreshWillBuffer(): void {
+    const stateTopic = `${SPARKPLUG_NAMESPACE}/STATE/${this.state.scadaHostId}`;
+
+    this.state.willBuffer = {
+      topic: stateTopic,
+      payload: createStatePayload(false), // Will always sends OFFLINE
+      properties: {
+        willDelayInterval: DEFAULT_WILL_DELAY_SECONDS,
+        userProperties: {
+          spbType: 'STATE',
+          spbGroup: this.state.scadaHostId,
+        },
+      },
+    };
+
+    console.log('[SCADA MQTT] Will buffer refreshed for future sessions');
+  }
+
+  /**
+   * Get the current Will buffer (for debugging/inspection)
+   */
+  getWillBuffer(): ScadaMqttServiceState['willBuffer'] {
+    return this.state.willBuffer;
   }
 
   /**
@@ -210,10 +279,10 @@ class ScadaMqttService {
 
       this.state.client.publish(topic, payload as any, { qos: 0 }, (error) => {
         if (error) {
-          console.error(`❌ [SCADA MQTT] Failed to send NCMD: ${error.message}`);
+          console.error(`[SCADA MQTT] Failed to send NCMD: ${error.message}`);
           reject(error);
         } else {
-          console.log(`✅ [SCADA MQTT] Sent NCMD → ${topic}`);
+          console.log(`[SCADA MQTT] Sent NCMD -> ${topic}`);
           resolve();
         }
       });
@@ -252,10 +321,10 @@ class ScadaMqttService {
 
       this.state.client.publish(topic, payload as any, { qos: 0 }, (error) => {
         if (error) {
-          console.error(`❌ [SCADA MQTT] Failed to send DCMD: ${error.message}`);
+          console.error(`[SCADA MQTT] Failed to send DCMD: ${error.message}`);
           reject(error);
         } else {
-          console.log(`✅ [SCADA MQTT] Sent DCMD → ${topic}`);
+          console.log(`[SCADA MQTT] Sent DCMD -> ${topic}`);
           resolve();
         }
       });
@@ -267,7 +336,7 @@ class ScadaMqttService {
    */
   disconnect(): void {
     if (this.state.client) {
-      console.log('🔌 [SCADA MQTT] Disconnecting...');
+      console.log('[SCADA MQTT] Disconnecting...');
       // The will message will automatically publish STATE = OFFLINE
       this.state.client.end();
       this.state.client = null;

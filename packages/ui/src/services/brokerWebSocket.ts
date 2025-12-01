@@ -21,18 +21,18 @@ export class BrokerWebSocketService {
    */
   connect(): void {
     if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) {
-      console.log('📡 Broker WebSocket already connected or connecting');
+      console.log('[Broker WebSocket] Already connected or connecting');
       return;
     }
 
     this.isIntentionallyClosed = false;
 
     try {
-      console.log(`📡 Connecting to broker WebSocket: ${this.brokerUrl}`);
+      console.log(`[Broker WebSocket] Connecting to: ${this.brokerUrl}`);
       this.ws = new WebSocket(this.brokerUrl);
 
       this.ws.onopen = () => {
-        console.log('✅ Broker WebSocket connected');
+        console.log('[Broker WebSocket] Connected');
         this.reconnectAttempts = 0;
         if (this.reconnectInterval) {
           clearTimeout(this.reconnectInterval);
@@ -48,16 +48,16 @@ export class BrokerWebSocketService {
           const message = JSON.parse(event.data);
           this.handleMessage(message);
         } catch (error) {
-          console.error('❌ Error parsing broker WebSocket message:', error);
+          console.error('[Broker WebSocket] Error parsing message:', error);
         }
       };
 
       this.ws.onerror = (error) => {
-        console.error('❌ Broker WebSocket error:', error);
+        console.error('[Broker WebSocket] Error:', error);
       };
 
       this.ws.onclose = () => {
-        console.log('📡 Broker WebSocket closed');
+        console.log('[Broker WebSocket] Closed');
         this.stopPingInterval();
 
         if (!this.isIntentionallyClosed) {
@@ -65,7 +65,7 @@ export class BrokerWebSocketService {
         }
       };
     } catch (error) {
-      console.error('❌ Failed to create broker WebSocket:', error);
+      console.error('[Broker WebSocket] Failed to create:', error);
       this.scheduleReconnect();
     }
   }
@@ -79,7 +79,7 @@ export class BrokerWebSocketService {
     switch (message.type) {
       case 'initial':
         // Initial data dump
-        console.log('📥 Received initial broker data');
+        console.log('[Broker WebSocket] Received initial data');
 
         // Clear existing data
         store.clearLogs();
@@ -146,7 +146,7 @@ export class BrokerWebSocketService {
         break;
 
       default:
-        console.warn('⚠️ Unknown broker WebSocket message type:', message.type);
+        console.warn('[Broker WebSocket] Unknown message type:', message.type);
     }
   }
 
@@ -228,14 +228,14 @@ export class BrokerWebSocketService {
    */
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('❌ Max reconnection attempts reached for broker WebSocket');
+      console.error('[Broker WebSocket] Max reconnection attempts reached');
       return;
     }
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.min(this.reconnectAttempts, 5);
 
-    console.log(`🔄 Attempting to reconnect to broker WebSocket in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    console.log(`[Broker WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
     this.reconnectInterval = setTimeout(() => {
       this.connect();
@@ -283,7 +283,7 @@ export class BrokerWebSocketService {
       this.ws = null;
     }
 
-    console.log('📡 Broker WebSocket disconnected');
+    console.log('[Broker WebSocket] Disconnected');
   }
 
   /**
