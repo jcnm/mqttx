@@ -29,7 +29,7 @@ interface SimulationState {
     string,
     {
       bdSeq: bigint;
-      seq: number;
+      seq: number; // Sequence number for ALL messages from this node (0-255)
       lastPublish: number;
       birthSent: boolean; // Track if BIRTH has been sent (for alias optimization)
     }
@@ -38,7 +38,6 @@ interface SimulationState {
     string,
     {
       nodeId: string;
-      seq: number;
       lastPublish: number;
       birthSent: boolean; // Track if BIRTH has been sent (for alias optimization)
     }
@@ -764,10 +763,11 @@ export class SimulationEngine {
   /**
    * Publish NBIRTH message
    * NOTE: Sparkplug B spec requires QoS 1 for BIRTH messages
+   * NOTE: seq MUST be 0 for NBIRTH (reset at birth per ISO/IEC 20237:2023)
    */
   private publishNodeBirth(node: SimulatedEoN): void {
     if (!this.mqttClient || !this.mqttClient.connected) {
-      console.warn('⚠️  MQTT client not connected');
+      console.warn('[Simulation] MQTT client not connected');
       return;
     }
 
@@ -776,12 +776,15 @@ export class SimulationEngine {
 
     const topic = `spBv1.0/${node.config.groupId}/NBIRTH/${node.config.edgeNodeId}`;
 
+    // Reset seq to 0 for NBIRTH (per Sparkplug B spec)
+    nodeState.seq = 0;
+
     // Build strongly-typed Sparkplug payload
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
       // Priority 3: Pass isBirth=true and entityId for alias optimization & history
       metrics: this.buildMetrics(node.metrics || [], 0, true, node.id),
-      seq: BigInt(this.incrementSeq(node.id)),
+      seq: BigInt(nodeState.seq), // NBIRTH always has seq=0
     };
 
     // Add bdSeq metric to the beginning
@@ -803,24 +806,35 @@ export class SimulationEngine {
   /**
    * Publish NDATA message
    * Sparkplug B Optimization: Only sends metrics that have changed since last publication
+   * NOTE: Includes Node/CurrentSeq metric per ISO/IEC 20237:2023
    */
   private publishNodeData(node: SimulatedEoN, currentTime: number): void {
     if (!this.mqttClient || !this.mqttClient.connected) return;
 
+    const nodeState = this.state.nodeStates.get(node.id);
+    if (!nodeState) return;
+
     const topic = `spBv1.0/${node.config.groupId}/NDATA/${node.config.edgeNodeId}`;
+
+    // Increment seq for this publish
+    const seq = this.incrementSeq(node.id);
 
     // Priority 3: Use change detection to only send changed metrics
     const metrics = this.buildMetrics(node.metrics || [], currentTime, false, node.id, true);
 
-    // Skip publishing if no metrics have changed (optimization)
-    if (metrics.length === 0) {
-      return;
-    }
+    // Add Node/CurrentSeq metric (per Sparkplug B spec)
+    const currentSeqMetric: SparkplugMetric = {
+      name: 'Node/CurrentSeq',
+      timestamp: BigInt(Date.now()),
+      datatype: 8, // UInt64
+      value: BigInt(seq),
+    };
+    metrics.unshift(currentSeqMetric);
 
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
       metrics,
-      seq: BigInt(this.incrementSeq(node.id)),
+      seq: BigInt(seq),
     };
 
     this.publish(topic, payload, node.config.network.qos);
@@ -874,11 +888,12 @@ export class SimulationEngine {
 
   /**
    * Initialize state for a device
+   * NOTE: Devices do NOT have their own seq - they use the parent node's seq
+   * per ISO/IEC 20237:2023 (Sparkplug B spec)
    */
   private initializeDeviceState(deviceId: string, nodeId: string): void {
     this.state.deviceStates.set(deviceId, {
       nodeId,
-      seq: 0,
       lastPublish: Date.now(),
       birthSent: false,
     });
@@ -887,10 +902,11 @@ export class SimulationEngine {
   /**
    * Publish DBIRTH message
    * NOTE: Sparkplug B spec requires QoS 1 for BIRTH messages
+   * NOTE: Device messages use the PARENT NODE's seq (per ISO/IEC 20237:2023)
    */
   private publishDeviceBirth(node: SimulatedEoN, device: any): void {
     if (!this.mqttClient || !this.mqttClient.connected) {
-      console.warn('⚠️  MQTT client not connected');
+      console.warn('[Simulation] MQTT client not connected');
       return;
     }
 
@@ -899,12 +915,15 @@ export class SimulationEngine {
 
     const topic = `spBv1.0/${node.config.groupId}/DBIRTH/${node.config.edgeNodeId}/${device.deviceId}`;
 
+    // Use parent NODE's seq (devices don't have their own sequence)
+    const seq = this.incrementSeq(node.id);
+
     // Build strongly-typed Sparkplug payload
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
       // Priority 3: Pass isBirth=true and entityId for alias optimization & history
       metrics: this.buildMetrics(device.metrics || [], 0, true, device.id),
-      seq: BigInt(this.incrementDeviceSeq(device.id)),
+      seq: BigInt(seq),
     };
 
     // Mark BIRTH as sent (for alias optimization)
@@ -917,6 +936,7 @@ export class SimulationEngine {
   /**
    * Publish DDATA message
    * Sparkplug B Optimization: Only sends metrics that have changed since last publication
+   * NOTE: Device messages use the PARENT NODE's seq (per ISO/IEC 20237:2023)
    */
   private publishDeviceData(node: SimulatedEoN, device: any, currentTime: number): void {
     if (!this.mqttClient || !this.mqttClient.connected) return;
@@ -931,10 +951,13 @@ export class SimulationEngine {
       return;
     }
 
+    // Use parent NODE's seq (devices don't have their own sequence)
+    const seq = this.incrementSeq(node.id);
+
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
       metrics,
-      seq: BigInt(this.incrementDeviceSeq(device.id)),
+      seq: BigInt(seq),
     };
 
     this.publish(topic, payload, node.config.network.qos);
@@ -943,6 +966,7 @@ export class SimulationEngine {
   /**
    * Publish DDEATH message
    * NOTE: Sparkplug B spec requires QoS 1 for DEATH messages
+   * NOTE: Device messages use the PARENT NODE's seq (per ISO/IEC 20237:2023)
    */
   private publishDeviceDeath(node: SimulatedEoN, device: any): void {
     if (!this.mqttClient || !this.mqttClient.connected) return;
@@ -952,10 +976,13 @@ export class SimulationEngine {
 
     const topic = `spBv1.0/${node.config.groupId}/DDEATH/${node.config.edgeNodeId}/${device.deviceId}`;
 
+    // Use parent NODE's seq (devices don't have their own sequence)
+    const seq = this.incrementSeq(node.id);
+
     const payload: SparkplugPayload = {
       timestamp: BigInt(Date.now()),
       metrics: [],
-      seq: BigInt(this.incrementDeviceSeq(device.id)),
+      seq: BigInt(seq),
     };
 
     // CRITICAL: Sparkplug B spec REQUIRES QoS 1 for DEATH messages
@@ -981,16 +1008,6 @@ export class SimulationEngine {
     }
   }
 
-  /**
-   * Increment device sequence number (0-255 wrapping)
-   */
-  private incrementDeviceSeq(deviceId: string): number {
-    const deviceState = this.state.deviceStates.get(deviceId);
-    if (!deviceState) return 0;
-
-    deviceState.seq = (deviceState.seq + 1) % 256;
-    return deviceState.seq;
-  }
 
   /**
    * Convert simple properties object to Sparkplug PropertySet
@@ -1479,10 +1496,11 @@ export class SimulationEngine {
    * Restore simulation state from persistence
    * CRITICAL: This is used when loading a saved simulation
    * bdSeq will already be incremented by the persistence service
+   * NOTE: Devices no longer have their own seq (they use parent node's seq)
    */
   public restoreSimulationState(
     nodeStates: Map<string, { bdSeq: string; seq: number; lastPublish: number; birthSent: boolean }>,
-    deviceStates: Map<string, { bdSeq: string; seq: number; lastPublish: number; birthSent: boolean; nodeId: string }>
+    deviceStates: Map<string, { lastPublish: number; birthSent: boolean; nodeId: string }>
   ): void {
     // Convert string bdSeq back to BigInt
     nodeStates.forEach((state, nodeId) => {
@@ -1497,13 +1515,12 @@ export class SimulationEngine {
     deviceStates.forEach((state, deviceId) => {
       this.state.deviceStates.set(deviceId, {
         nodeId: state.nodeId,
-        seq: state.seq,
         lastPublish: state.lastPublish,
         birthSent: state.birthSent,
       });
     });
 
-    console.log('✅ Simulation state restored');
+    console.log('[Simulation] State restored');
     console.log(`   Nodes: ${this.state.nodeStates.size}`);
     console.log(`   Devices: ${this.state.deviceStates.size}`);
     this.state.nodeStates.forEach((state, nodeId) => {
