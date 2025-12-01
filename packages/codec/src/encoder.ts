@@ -166,7 +166,72 @@ export function createNDeathPayload(bdSeq: bigint): Payload {
   };
 }
 
+/**
+ * Create NDATA payload with sequence number
+ * ISO/IEC 20237:2023 Section 6.4.4 - Message Sequencing
+ *
+ * @param seq - The sequence number (0-255, wrapping)
+ * @param metrics - Array of metrics to include
+ * @param includeCurrentSeq - Whether to include Node/CurrentSeq metric (default: true)
+ */
 export function createNDataPayload(
+  seq: bigint,
+  metrics: Payload['metrics'] = [],
+  includeCurrentSeq = true
+): Payload {
+  const timestamp = BigInt(Date.now());
+
+  // Build metrics array with optional Node/CurrentSeq
+  const allMetrics: Payload['metrics'] = [];
+
+  // Add Node/CurrentSeq metric if requested (per Sparkplug B spec)
+  if (includeCurrentSeq) {
+    allMetrics.push({
+      name: 'Node/CurrentSeq',
+      timestamp,
+      datatype: 8, // UInt64
+      value: seq,
+    });
+  }
+
+  // Add user-provided metrics
+  if (metrics) {
+    allMetrics.push(...metrics);
+  }
+
+  return {
+    timestamp,
+    seq,
+    metrics: allMetrics,
+  };
+}
+
+/**
+ * Create DDATA payload with sequence number
+ * ISO/IEC 20237:2023 Section 6.4.4 - Message Sequencing
+ *
+ * @param seq - The sequence number from the parent node (0-255, wrapping)
+ * @param metrics - Array of device metrics to include
+ */
+export function createDDataPayload(
+  seq: bigint,
+  metrics: Payload['metrics'] = []
+): Payload {
+  return {
+    timestamp: BigInt(Date.now()),
+    seq,
+    metrics,
+  };
+}
+
+/**
+ * Create DBIRTH payload with sequence number
+ * ISO/IEC 20237:2023 - Device birth uses parent node's sequence
+ *
+ * @param seq - The sequence number from the parent node
+ * @param metrics - Array of device metrics to include
+ */
+export function createDBirthPayload(
   seq: bigint,
   metrics: Payload['metrics'] = []
 ): Payload {
