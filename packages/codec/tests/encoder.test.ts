@@ -4,6 +4,8 @@ import {
   createNBirthPayload,
   createNDeathPayload,
   createNDataPayload,
+  createDDataPayload,
+  createDBirthPayload,
   createStatePayload,
 } from '../src/encoder.js';
 import { decodePayload } from '../src/decoder.js';
@@ -204,7 +206,7 @@ describe('Encoder', () => {
   });
 
   describe('createNDataPayload', () => {
-    it('should create NDATA payload', () => {
+    it('should create NDATA payload with Node/CurrentSeq metric by default', () => {
       const seq = 5n;
       const metrics = [
         { name: 'temperature', datatype: DataType.Float, value: 25.5 },
@@ -214,23 +216,118 @@ describe('Encoder', () => {
 
       expect(payload.timestamp).toBeDefined();
       expect(payload.seq).toBe(seq);
+      // Should have Node/CurrentSeq + user metrics
+      expect(payload.metrics).toHaveLength(2);
+      expect(payload.metrics?.[0].name).toBe('Node/CurrentSeq');
+      expect(payload.metrics?.[0].value).toBe(seq);
+      expect(payload.metrics?.[0].datatype).toBe(DataType.UInt64);
+      expect(payload.metrics?.[1].name).toBe('temperature');
+    });
+
+    it('should create NDATA without Node/CurrentSeq when disabled', () => {
+      const seq = 5n;
+      const metrics = [
+        { name: 'temperature', datatype: DataType.Float, value: 25.5 },
+      ];
+
+      const payload = createNDataPayload(seq, metrics, false);
+
+      expect(payload.seq).toBe(seq);
       expect(payload.metrics).toHaveLength(1);
       expect(payload.metrics?.[0].name).toBe('temperature');
     });
 
-    it('should create NDATA with empty metrics', () => {
+    it('should create NDATA with empty metrics but include Node/CurrentSeq', () => {
       const seq = 10n;
       const payload = createNDataPayload(seq);
+
+      expect(payload.seq).toBe(seq);
+      // Should have Node/CurrentSeq metric
+      expect(payload.metrics).toHaveLength(1);
+      expect(payload.metrics?.[0].name).toBe('Node/CurrentSeq');
+    });
+
+    it('should handle seq cycling (0-255)', () => {
+      const seq = 255n;
+      const payload = createNDataPayload(seq, [], false);
+
+      expect(payload.seq).toBe(255n);
+    });
+  });
+
+  describe('createDDataPayload', () => {
+    it('should create DDATA payload with seq from parent node', () => {
+      const seq = 7n;
+      const metrics = [
+        { name: 'deviceTemp', datatype: DataType.Float, value: 30.5 },
+      ];
+
+      const payload = createDDataPayload(seq, metrics);
+
+      expect(payload.timestamp).toBeDefined();
+      expect(payload.seq).toBe(seq);
+      expect(payload.metrics).toHaveLength(1);
+      expect(payload.metrics?.[0].name).toBe('deviceTemp');
+    });
+
+    it('should create DDATA with empty metrics', () => {
+      const seq = 15n;
+      const payload = createDDataPayload(seq);
 
       expect(payload.seq).toBe(seq);
       expect(payload.metrics).toEqual([]);
     });
 
-    it('should handle seq cycling (0-255)', () => {
-      const seq = 255n;
-      const payload = createNDataPayload(seq);
+    it('should encode and decode DDATA payload', () => {
+      const seq = 20n;
+      const payload = createDDataPayload(seq, [
+        { name: 'status', datatype: DataType.Boolean, value: true },
+      ]);
 
-      expect(payload.seq).toBe(255n);
+      const encoded = encodePayload(payload);
+      const decoded = decodePayload(encoded);
+
+      expect(decoded.seq).toBe(seq);
+      expect(decoded.metrics?.[0].name).toBe('status');
+    });
+  });
+
+  describe('createDBirthPayload', () => {
+    it('should create DBIRTH payload with seq from parent node', () => {
+      const seq = 3n;
+      const metrics = [
+        { name: 'DeviceId', datatype: DataType.String, value: 'Device001' },
+        { name: 'temperature', datatype: DataType.Float, value: 25.0 },
+      ];
+
+      const payload = createDBirthPayload(seq, metrics);
+
+      expect(payload.timestamp).toBeDefined();
+      expect(payload.seq).toBe(seq);
+      expect(payload.metrics).toHaveLength(2);
+      expect(payload.metrics?.[0].name).toBe('DeviceId');
+      expect(payload.metrics?.[1].name).toBe('temperature');
+    });
+
+    it('should create DBIRTH with empty metrics', () => {
+      const seq = 5n;
+      const payload = createDBirthPayload(seq);
+
+      expect(payload.seq).toBe(seq);
+      expect(payload.metrics).toEqual([]);
+    });
+
+    it('should encode and decode DBIRTH payload', () => {
+      const seq = 10n;
+      const payload = createDBirthPayload(seq, [
+        { name: 'deviceStatus', datatype: DataType.Boolean, value: true },
+      ]);
+
+      const encoded = encodePayload(payload);
+      const decoded = decodePayload(encoded);
+
+      expect(decoded.seq).toBe(seq);
+      expect(decoded.metrics?.[0].name).toBe('deviceStatus');
     });
   });
 
