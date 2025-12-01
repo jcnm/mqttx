@@ -16,9 +16,6 @@ import type { BrokerLog } from '../types/broker.types';
 // Sparkplug B namespace prefix
 const SPARKPLUG_NAMESPACE = 'spBv1.0';
 
-// MQTT 5 Will Delay Interval (seconds) - time broker waits before publishing Will
-const DEFAULT_WILL_DELAY_SECONDS = 10;
-
 /**
  * Create a Sparkplug B compliant STATE payload
  */
@@ -29,14 +26,6 @@ function createStatePayload(online: boolean): string {
   });
 }
 
-/**
- * MQTT 5 Will Message properties for Sparkplug B
- */
-interface WillProperties {
-  willDelayInterval: number; // Seconds before Will is published after disconnect
-  userProperties: Record<string, string>; // Custom key-value pairs
-}
-
 interface ScadaMqttServiceState {
   client: MqttClient | null;
   isConnected: boolean;
@@ -45,12 +34,6 @@ interface ScadaMqttServiceState {
   scadaHostId: string;
   messages: Array<{ topic: string; payload: Buffer; timestamp: number }>;
   onMessageCallback: ((log: BrokerLog) => void) | null;
-  // Will buffer for future sessions (refreshed after birth/rebirth)
-  willBuffer: {
-    topic: string;
-    payload: string;
-    properties: WillProperties;
-  } | null;
 }
 
 class ScadaMqttService {
@@ -62,7 +45,6 @@ class ScadaMqttService {
     scadaHostId: 'MQTTX-SCADA', // Sparkplug B Host Application ID
     messages: [],
     onMessageCallback: null,
-    willBuffer: null,
   };
 
   /**
@@ -79,35 +61,18 @@ class ScadaMqttService {
     // Sparkplug B STATE topic: spBv1.0/STATE/{hostId}
     const stateTopic = `${SPARKPLUG_NAMESPACE}/STATE/${this.state.scadaHostId}`;
 
-    // Initialize Will buffer with MQTT 5 properties
-    this.refreshWillBuffer();
-
-    // MQTT 5 Will properties for Sparkplug B compliance
-    const willProperties: WillProperties = this.state.willBuffer?.properties || {
-      willDelayInterval: DEFAULT_WILL_DELAY_SECONDS,
-      userProperties: {
-        spbType: 'STATE',
-        spbGroup: this.state.scadaHostId,
-      },
-    };
-
     const client = mqtt.connect(brokerUrl, {
       clientId: `scada-host-${Math.random().toString(16).slice(2, 8)}`,
       clean: true,
       reconnectPeriod: 5000,
       keepalive: 60,
-      protocolVersion: 5, // MQTT v5.0 for Will properties support
+      protocolVersion: 4, // MQTT v3.1.1 (Aedes broker does not support MQTT 5)
       // Sparkplug B: Will message for STATE = OFFLINE (JSON payload with timestamp)
       will: {
         topic: stateTopic,
         payload: createStatePayload(false),
         qos: 1,
         retain: true,
-        // MQTT 5 Will properties
-        properties: {
-          willDelayInterval: willProperties.willDelayInterval,
-          userProperties: willProperties.userProperties,
-        },
       },
     });
 
@@ -120,10 +85,6 @@ class ScadaMqttService {
       // Sparkplug B: Publish STATE = ONLINE (retained)
       // This triggers the broker to request rebirth from all online EoN
       this.publishState(true);
-
-      // Refresh Will buffer after successful birth/connection
-      // This prepares the buffer for future reconnections
-      this.refreshWillBuffer();
 
       // Subscribe to all Sparkplug B topics with QoS 1 for reliable delivery
       client.subscribe(`${SPARKPLUG_NAMESPACE}/#`, { qos: 1 }, (err) => {
@@ -220,36 +181,6 @@ class ScadaMqttService {
         }
       }
     );
-  }
-
-  /**
-   * Refresh Will buffer for future sessions
-   * Called after birth/rebirth to update the Will message payload
-   * MQTT 5 allows Will properties that provide additional context
-   */
-  private refreshWillBuffer(): void {
-    const stateTopic = `${SPARKPLUG_NAMESPACE}/STATE/${this.state.scadaHostId}`;
-
-    this.state.willBuffer = {
-      topic: stateTopic,
-      payload: createStatePayload(false), // Will always sends OFFLINE
-      properties: {
-        willDelayInterval: DEFAULT_WILL_DELAY_SECONDS,
-        userProperties: {
-          spbType: 'STATE',
-          spbGroup: this.state.scadaHostId,
-        },
-      },
-    };
-
-    console.log('[SCADA MQTT] Will buffer refreshed for future sessions');
-  }
-
-  /**
-   * Get the current Will buffer (for debugging/inspection)
-   */
-  getWillBuffer(): ScadaMqttServiceState['willBuffer'] {
-    return this.state.willBuffer;
   }
 
   /**

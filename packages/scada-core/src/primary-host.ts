@@ -8,27 +8,11 @@ import type { StatePublisher } from './state-publisher.js';
 import type { BirthMonitor } from './birth-monitor.js';
 import type { CommandSender } from './command-sender.js';
 
-// MQTT 5 Will Delay Interval (seconds) - time broker waits before publishing Will
-const DEFAULT_WILL_DELAY_SECONDS = 10;
-
 export interface PrimaryHostOptions {
   brokerUrl: string;
   hostId: string;
   namespace?: string;
   publishInterval?: number;
-  willDelayInterval?: number; // MQTT 5 Will delay in seconds
-}
-
-/**
- * MQTT 5 Will Message properties for Sparkplug B
- */
-interface WillBuffer {
-  topic: string;
-  payload: string | Buffer; // STATE payload is JSON string
-  properties: {
-    willDelayInterval: number;
-    userProperties: Record<string, string>;
-  };
 }
 
 export class PrimaryHostApplication {
@@ -37,48 +21,27 @@ export class PrimaryHostApplication {
   private namespace: string;
   private brokerUrl: string;
   private publishInterval: number;
-  private willDelayInterval: number;
   private statePublishTimer: NodeJS.Timeout | null = null;
   private online = false;
-  // Will buffer for future sessions (refreshed after birth/rebirth)
-  private willBuffer: WillBuffer | null = null;
 
   constructor(options: PrimaryHostOptions) {
     this.hostId = options.hostId;
     this.namespace = options.namespace || 'spBv1.0';
     this.brokerUrl = options.brokerUrl;
     this.publishInterval = options.publishInterval || 30000; // 30 seconds
-    this.willDelayInterval = options.willDelayInterval || DEFAULT_WILL_DELAY_SECONDS;
   }
 
   async connect(): Promise<void> {
-    // Initialize Will buffer with MQTT 5 properties
-    this.refreshWillBuffer();
-
     return new Promise((resolve, reject) => {
-      // MQTT 5 Will properties for Sparkplug B compliance
-      const willProperties = this.willBuffer?.properties || {
-        willDelayInterval: this.willDelayInterval,
-        userProperties: {
-          spbType: 'STATE',
-          spbGroup: this.hostId,
-        },
-      };
-
       this.client = mqtt.connect(this.brokerUrl, {
         clientId: this.hostId,
         clean: true,
-        protocolVersion: 5, // MQTT v5.0 for Will properties support
+        protocolVersion: 4, // MQTT v3.1.1 (Aedes broker does not support MQTT 5)
         will: {
           topic: buildStateTopic(this.hostId, this.namespace),
           payload: createStatePayload(false),
           qos: 1,
           retain: true,
-          // MQTT 5 Will properties
-          properties: {
-            willDelayInterval: willProperties.willDelayInterval,
-            userProperties: willProperties.userProperties,
-          },
         },
       });
 
@@ -88,10 +51,6 @@ export class PrimaryHostApplication {
 
         // Publish online STATE
         this.publishState(true);
-
-        // Refresh Will buffer after successful birth/connection
-        // This prepares the buffer for future reconnections
-        this.refreshWillBuffer();
 
         // Start periodic STATE publishing
         this.startStatePublishing();
@@ -137,36 +96,6 @@ export class PrimaryHostApplication {
         }
       }
     );
-  }
-
-  /**
-   * Refresh Will buffer for future sessions
-   * Called after birth/rebirth to update the Will message payload
-   * MQTT 5 allows Will properties that provide additional context
-   */
-  private refreshWillBuffer(): void {
-    const stateTopic = buildStateTopic(this.hostId, this.namespace);
-
-    this.willBuffer = {
-      topic: stateTopic,
-      payload: createStatePayload(false), // Will always sends OFFLINE
-      properties: {
-        willDelayInterval: this.willDelayInterval,
-        userProperties: {
-          spbType: 'STATE',
-          spbGroup: this.hostId,
-        },
-      },
-    };
-
-    console.log('[Primary Host] Will buffer refreshed for future sessions');
-  }
-
-  /**
-   * Get the current Will buffer (for debugging/inspection)
-   */
-  getWillBuffer(): WillBuffer | null {
-    return this.willBuffer;
   }
 
   private startStatePublishing(): void {
