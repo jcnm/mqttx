@@ -375,67 +375,249 @@ function ASCIITab({ log }: { log: BrokerLog }) {
   );
 }
 
-// Structure Tab - Show alias mappings and structure
+// Structure Tab - Show Sparkplug B specification structure
 function StructureTab({ log }: { log: BrokerLog }) {
-  if (!log.decoded?.metrics) {
-    return <div className="text-slate-400">No structure information available</div>;
-  }
-
-  const metricsWithAliases = log.decoded.metrics.filter((m: any) => m.alias !== undefined);
-  const metricsWithoutNames = log.decoded.metrics.filter((m: any) => !m.name && m.alias !== undefined);
+  // Parse topic structure
+  const topicParts = log.topic?.split('/') || [];
+  const isSparkplug = log.topic?.startsWith('spBv1.0/');
 
   return (
     <div className="space-y-6">
-      {/* Alias Mapping */}
-      {metricsWithAliases.length > 0 && (
-        <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">
-            Alias Mapping ({metricsWithAliases.length} aliased metrics)
-          </h3>
-          <div className="space-y-2">
-            {metricsWithAliases.map((metric: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-4 p-3 bg-slate-950 rounded border border-slate-800">
-                <div className="w-20">
-                  <span className="text-blue-400 font-mono font-semibold">
-                    #{metric.alias.toString()}
-                  </span>
-                </div>
-                <div className="flex-1">
-                  <div className="text-white font-medium">{metric.name || 'Unnamed Metric'}</div>
-                  <div className="text-xs text-slate-500">Type: {getDatatypeName(metric.datatype)}</div>
-                </div>
-                <div className="text-green-400 font-mono">
-                  {formatMetricValue(metric.value, metric.datatype || 0)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Topic Structure */}
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <Layers className="w-5 h-5 text-blue-400" />
+          Topic Structure (Sparkplug B Specification)
+        </h3>
 
-      {/* Optimization Info */}
-      {metricsWithoutNames.length > 0 && (
-        <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-6">
-          <div className="flex items-start gap-3">
-            <Lightbulb className="w-6 h-6 text-blue-400 flex-shrink-0" />
-            <div>
-              <h4 className="text-white font-semibold mb-2">Sparkplug B Optimization Detected</h4>
-              <p className="text-sm text-slate-300">
-                This message uses alias-only optimization for {metricsWithoutNames.length} metric(s).
-                Metric names are omitted to reduce payload size (sent only in BIRTH messages).
-              </p>
+        {isSparkplug ? (
+          <div className="space-y-4">
+            {/* Visual Topic Breakdown */}
+            <div className="bg-slate-950 rounded-lg p-4 font-mono text-sm">
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="px-2 py-1 bg-purple-900/50 text-purple-400 rounded">
+                  {topicParts[0] || 'spBv1.0'}
+                </span>
+                <span className="text-slate-500">/</span>
+                <span className="px-2 py-1 bg-blue-900/50 text-blue-400 rounded">
+                  {topicParts[1] || 'groupId'}
+                </span>
+                <span className="text-slate-500">/</span>
+                <span className={`px-2 py-1 rounded ${
+                  log.messageType === 'NBIRTH' || log.messageType === 'DBIRTH' ? 'bg-green-900/50 text-green-400' :
+                  log.messageType === 'NDEATH' || log.messageType === 'DDEATH' ? 'bg-red-900/50 text-red-400' :
+                  log.messageType === 'NDATA' || log.messageType === 'DDATA' ? 'bg-cyan-900/50 text-cyan-400' :
+                  log.messageType === 'NCMD' || log.messageType === 'DCMD' ? 'bg-purple-900/50 text-purple-400' :
+                  'bg-yellow-900/50 text-yellow-400'
+                }`}>
+                  {topicParts[2] || 'messageType'}
+                </span>
+                <span className="text-slate-500">/</span>
+                <span className="px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded">
+                  {topicParts[3] || 'edgeNodeId'}
+                </span>
+                {topicParts[4] && (
+                  <>
+                    <span className="text-slate-500">/</span>
+                    <span className="px-2 py-1 bg-orange-900/50 text-orange-400 rounded">
+                      {topicParts[4]}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Topic Legend */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded bg-purple-500"></span>
+                <span className="text-slate-400">Namespace (spBv1.0)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded bg-blue-500"></span>
+                <span className="text-slate-400">Group ID</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded bg-cyan-500"></span>
+                <span className="text-slate-400">Message Type</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded bg-emerald-500"></span>
+                <span className="text-slate-400">Edge Node ID</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded bg-orange-500"></span>
+                <span className="text-slate-400">Device ID (optional)</span>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="text-slate-400">
+            Not a Sparkplug B topic. Topic: <code className="text-yellow-400">{log.topic}</code>
+          </div>
+        )}
+      </div>
+
+      {/* Payload Structure - Sparkplug Protobuf */}
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <Zap className="w-5 h-5 text-yellow-400" />
+          Payload Structure (Protobuf Schema)
+        </h3>
+
+        {log.decoded ? (
+          <div className="space-y-4">
+            {/* Payload Header */}
+            <div className="bg-slate-950 rounded-lg p-4 border border-slate-800">
+              <div className="text-sm font-semibold text-slate-300 mb-3">Payload Header</div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">timestamp:</span>
+                  <span className="text-cyan-400 font-mono">
+                    {log.decoded.timestamp ? new Date(Number(log.decoded.timestamp)).toISOString() : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">seq:</span>
+                  <span className="text-blue-400 font-mono">
+                    {log.decoded.seq !== undefined ? log.decoded.seq.toString() : 'N/A'}
+                  </span>
+                </div>
+                {log.decoded.uuid && (
+                  <div className="flex justify-between col-span-2">
+                    <span className="text-slate-400">uuid:</span>
+                    <span className="text-purple-400 font-mono">{log.decoded.uuid}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Metrics Array Structure */}
+            {log.decoded.metrics && log.decoded.metrics.length > 0 && (
+              <div className="bg-slate-950 rounded-lg p-4 border border-slate-800">
+                <div className="text-sm font-semibold text-slate-300 mb-3">
+                  Metrics Array ({log.decoded.metrics.length} metrics)
+                </div>
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {log.decoded.metrics.map((metric: any, idx: number) => (
+                    <details key={idx} className="bg-slate-900 rounded border border-slate-700">
+                      <summary className="px-3 py-2 cursor-pointer hover:bg-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-slate-500 text-xs">#{idx}</span>
+                          <span className="text-emerald-400 font-mono text-sm">
+                            {metric.name || `alias_${metric.alias}`}
+                          </span>
+                        </div>
+                        <span className="text-green-400 font-mono text-sm">
+                          {formatMetricValue(metric.value, metric.datatype || 0)}
+                        </span>
+                      </summary>
+                      <div className="px-3 py-2 border-t border-slate-700 text-xs space-y-1">
+                        {metric.name && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">name:</span>
+                            <span className="text-white font-mono">{metric.name}</span>
+                          </div>
+                        )}
+                        {metric.alias !== undefined && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">alias:</span>
+                            <span className="text-blue-400 font-mono">{metric.alias.toString()}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">datatype:</span>
+                          <span className="text-purple-400 font-mono">
+                            {metric.datatype} ({getDatatypeName(metric.datatype)})
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">value:</span>
+                          <span className="text-green-400 font-mono">
+                            {formatMetricValue(metric.value, metric.datatype || 0)}
+                          </span>
+                        </div>
+                        {metric.timestamp && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">timestamp:</span>
+                            <span className="text-cyan-400 font-mono">
+                              {new Date(Number(metric.timestamp)).toISOString()}
+                            </span>
+                          </div>
+                        )}
+                        {metric.is_historical !== undefined && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">is_historical:</span>
+                            <span className="text-yellow-400">{metric.is_historical ? 'true' : 'false'}</span>
+                          </div>
+                        )}
+                        {metric.is_transient !== undefined && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">is_transient:</span>
+                            <span className="text-yellow-400">{metric.is_transient ? 'true' : 'false'}</span>
+                          </div>
+                        )}
+                        {metric.is_null !== undefined && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">is_null:</span>
+                            <span className="text-red-400">{metric.is_null ? 'true' : 'false'}</span>
+                          </div>
+                        )}
+                        {metric.properties && (
+                          <div className="mt-2">
+                            <span className="text-slate-400">properties:</span>
+                            <pre className="mt-1 text-xs text-slate-300 bg-slate-800 p-2 rounded overflow-auto">
+                              {JSON.stringify(metric.properties, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-slate-400">No decoded Sparkplug payload available</div>
+        )}
+      </div>
+
+      {/* Alias Optimization Info */}
+      {log.decoded?.metrics && (
+        <>
+          {log.decoded.metrics.filter((m: any) => m.alias !== undefined && !m.name).length > 0 && (
+            <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-6">
+              <div className="flex items-start gap-3">
+                <Lightbulb className="w-6 h-6 text-blue-400 flex-shrink-0" />
+                <div>
+                  <h4 className="text-white font-semibold mb-2">Sparkplug B Alias Optimization</h4>
+                  <p className="text-sm text-slate-300">
+                    {log.decoded.metrics.filter((m: any) => m.alias !== undefined && !m.name).length} metric(s)
+                    use alias-only references. Names are omitted after BIRTH to reduce payload size.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Message Structure Tree */}
-      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Payload Structure</h3>
-        <pre className="text-xs text-slate-300 overflow-auto">
-          {JSON.stringify(log.decoded, null, 2)}
-        </pre>
-      </div>
+      {/* Raw JSON Structure */}
+      <details className="bg-slate-900 rounded-lg border border-slate-800">
+        <summary className="px-6 py-4 cursor-pointer hover:bg-slate-800 font-semibold text-white flex items-center gap-2">
+          <FileText className="w-5 h-5 text-slate-400" />
+          Raw Decoded Payload (JSON)
+        </summary>
+        <div className="px-6 py-4 border-t border-slate-800">
+          <pre className="text-xs text-slate-300 overflow-auto max-h-64">
+            {log.decoded
+              ? JSON.stringify(log.decoded, (_key, value) =>
+                  typeof value === 'bigint' ? value.toString() : value, 2)
+              : 'No decoded payload'}
+          </pre>
+        </div>
+      </details>
     </div>
   );
 }
