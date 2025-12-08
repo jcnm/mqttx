@@ -28,7 +28,7 @@
     "protobufjs": "^7.4.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@types/node": "^24.10.1",
     "@types/pako": "^2.0.3",
     "protobufjs-cli": "^1.1.3",
     "typescript": "^5.7.2",
