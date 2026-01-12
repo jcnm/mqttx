@@ -23,7 +23,7 @@
     "@sparkplug/namespace": "workspace:*",
     "@sparkplug/state": "workspace:*",
     "mqtt": "^5.10.1",
-    "ioredis": "^5.4.1"
+    "ioredis": "^5.9.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
