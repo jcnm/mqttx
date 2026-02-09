@@ -22,8 +22,8 @@
     "@sparkplug/codec": "workspace:*",
     "@sparkplug/namespace": "workspace:*",
     "@sparkplug/state": "workspace:*",
-    "mqtt": "^5.10.1",
-    "ioredis": "^5.4.1"
+    "mqtt": "^5.15.0",
+    "ioredis": "^5.9.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
